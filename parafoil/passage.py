@@ -3,8 +3,7 @@ from functools import cached_property
 import numpy as np
 from plotly import graph_objects as go
 from parafoil.airfoil import Airfoil
-
-
+from parafoil.bspline import get_bspline
 @dataclass
 class Passage:
     "A row of blades for CFD simulation"
@@ -55,7 +54,6 @@ class PassageBuilder:
         num_blades: int = 2
     ):
         airfoil_coords = airfoil.coords
-        camber_coords = airfoil.camber_bspline(airfoil.sampling)
         height = spacing * num_blades
         airfoil_width: float = np.max(airfoil_coords[:, 0]) - np.min(airfoil_coords[:, 0])
         airfoil_leading_pnt = airfoil_coords[np.argmin(airfoil_coords[:, 0])]
@@ -69,19 +67,17 @@ class PassageBuilder:
             airfoil_offseted_coords = airfoil_coords+airfoil_offset-np.array([0, i*spacing])
             airfoil_row_coords.append(airfoil_offseted_coords)
 
-        top_passage_camber_coords = camber_coords + np.array([leading_edge_gap, height/2])
-        bottom_passage_camber_coords = np.flip(camber_coords, axis=0) + np.array([leading_edge_gap, -height/2])
+        passage_camber_ctrl_pnts = airfoil.camber_coords + np.array([leading_edge_gap, 0])
+        outline_ctrl_pnts=np.concatenate([    
+            np.array([[0, 0], [leading_edge_gap, 0]]),
+            passage_camber_ctrl_pnts,
+            np.array([[leading_edge_gap+airfoil_width+trailing_edge_gap, passage_camber_ctrl_pnts[-1][1]]])    # type: ignore
+        ])
+
+        passage_bspline = get_bspline(outline_ctrl_pnts, 3)
 
         return Passage(
-            top_outline=np.concatenate([
-                np.array([[0, height/2], [leading_edge_gap, height/2]]),
-                top_passage_camber_coords,
-                np.array([[leading_edge_gap+airfoil_width+trailing_edge_gap, top_passage_camber_coords[-1][1]]])    # type: ignore
-            ]),
-            bottom_outline=np.concatenate([
-                np.array([[leading_edge_gap+airfoil_width+trailing_edge_gap, bottom_passage_camber_coords[0][1]]]),  # type: ignore
-                bottom_passage_camber_coords,
-                np.array([[leading_edge_gap, -height/2], [0, -height/2]]),
-            ]),
+            top_outline=passage_bspline(airfoil.sampling) + np.array([0, height/2]),
+            bottom_outline=passage_bspline(airfoil.sampling_reversed) + np.array([0, -height/2]),
             airfoil_coords=airfoil_row_coords
         )
