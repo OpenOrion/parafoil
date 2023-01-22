@@ -1,22 +1,11 @@
 from dataclasses import dataclass, field
 from functools import cached_property
 from typing import List
-from scipy.interpolate import BSpline
 import numpy as np
 import plotly.graph_objects as go
 import numpy.typing as npt
 
-
-def get_bspline(ctrl_pnts: npt.NDArray, degree: int):
-    "get a bspline with clamped knots"
-    num_ctrl_pnts = ctrl_pnts.shape[0]
-    knots = np.pad(
-        array=np.linspace(0, 1, (num_ctrl_pnts + 1) - degree),
-        pad_width=(degree, degree),
-        mode='constant',
-        constant_values=(0, 1)
-    )
-    return BSpline(knots, ctrl_pnts, degree, extrapolate=False)
+from parafoil.bspline import get_bspline
 
 
 def get_thickness_dist_ctrl_pnts(
@@ -76,6 +65,7 @@ class Airfoil:
         self.num_thickness_dist_pnts = len(self.upper_thick_dist) + 4
         self.thickness_dist_sampling = np.linspace(0, 1, self.num_thickness_dist_pnts, endpoint=True)
         self.sampling = np.linspace(0, 1, self.num_samples, endpoint=True)
+        self.sampling_reversed = np.linspace(1, 0, self.num_samples, endpoint=True)
 
     @cached_property
     def axial_chord_length(self):
@@ -139,7 +129,7 @@ class Airfoil:
         return self.camber_bspline(self.thickness_dist_sampling)
 
     @cached_property
-    def camber_normal_coords(self)  -> npt.NDArray:
+    def camber_normal_coords(self) -> npt.NDArray:
         "camber normal line coordinates"
         camber_prime = self.camber_bspline.derivative(1)(self.thickness_dist_sampling)
         normal = np.array([-camber_prime[:, 1], camber_prime[:, 0]]) / np.linalg.norm(camber_prime, axis=1)
