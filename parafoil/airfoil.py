@@ -65,7 +65,6 @@ class Airfoil:
         self.num_thickness_dist_pnts = len(self.upper_thick_dist) + 4
         self.thickness_dist_sampling = np.linspace(0, 1, self.num_thickness_dist_pnts, endpoint=True)
         self.sampling = np.linspace(0, 1, self.num_samples, endpoint=True)
-        self.sampling_reversed = np.linspace(1, 0, self.num_samples, endpoint=True)
 
     @cached_property
     def axial_chord_length(self):
