@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from functools import cached_property
+from typing import Literal
 import numpy as np
 from plotly import graph_objects as go
 from parafoil.airfoil import Airfoil
@@ -51,7 +52,8 @@ class PassageBuilder:
         spacing: float,
         leading_edge_gap: float,
         trailing_edge_gap: float,
-        num_blades: int = 2
+        num_blades: int = 2,
+        type: Literal['camber', 'line'] = 'camber',
     ):
         airfoil_coords = airfoil.coords
         height = spacing * num_blades
@@ -67,17 +69,27 @@ class PassageBuilder:
             airfoil_offseted_coords = airfoil_coords+airfoil_offset-np.array([0, i*spacing])
             airfoil_row_coords.append(airfoil_offseted_coords)
 
-        passage_camber_ctrl_pnts = airfoil.camber_coords + np.array([leading_edge_gap, 0])
-        outline_ctrl_pnts=np.concatenate([    
-            np.array([[0, 0], [leading_edge_gap, 0]]),
-            passage_camber_ctrl_pnts,
-            np.array([[leading_edge_gap+airfoil_width+trailing_edge_gap, passage_camber_ctrl_pnts[-1][1]]])    # type: ignore
-        ])
+        
+        camber_coords = airfoil.camber_coords + np.array([leading_edge_gap, 0])
+        
+        if type == 'camber':
+            outline_ctrl_pnts=np.concatenate([    
+                np.array([[0, 0], [leading_edge_gap, 0]]),
+                camber_coords,
+                np.array([camber_coords[-1] + np.array([trailing_edge_gap, 0])])    # type: ignore
+            ])
+            passage_bspline = get_bspline(outline_ctrl_pnts, 3)
+            outline_coords = passage_bspline(airfoil.sampling)
 
-        passage_bspline = get_bspline(outline_ctrl_pnts, 3)
+        else:
+            outline_coords = np.concatenate([
+                    np.array([[0, 0], [leading_edge_gap, 0]]),
+                    np.array([camber_coords[0], camber_coords[-1]]),
+                    np.array([camber_coords[-1] + np.array([trailing_edge_gap, 0])])    # type: ignore
+            ])
 
         return Passage(
-            top_outline=passage_bspline(airfoil.sampling) + np.array([0, height/2]),
-            bottom_outline=passage_bspline(airfoil.sampling_reversed) + np.array([0, -height/2]),
+            top_outline=outline_coords + np.array([0, height/2]),
+            bottom_outline=np.flip(outline_coords, axis=0) + np.array([0, -height/2]),
             airfoil_coords=airfoil_row_coords
         )
