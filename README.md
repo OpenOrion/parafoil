@@ -69,7 +69,7 @@ passage.visualize()
 ```
 git clone https://github.com/Turbodesigner/parafoil.git
 cd parafoil
-pip install -r requirements.txt
+pip install -r requirements_dev.txt
 ```
 
 # Help Wanted
