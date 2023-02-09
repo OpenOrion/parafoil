@@ -11,6 +11,7 @@ setup(
    packages=['parafoil'],
    install_requires=[
     "numpy",
-    "scipy"
+    "scipy",
+    "git+https://github.com/Turbodesigner/ezmesh.git#egg=ezmesh"
    ]
 )
