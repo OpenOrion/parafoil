@@ -4,7 +4,6 @@ from typing import List
 import numpy as np
 import plotly.graph_objects as go
 import numpy.typing as npt
-
 from parafoil.bspline import get_bspline
 
 
@@ -52,7 +51,7 @@ class Airfoil:
     chord_length: float = 1.0
     "chord length (length)"
 
-    num_samples: int = 100
+    num_samples: int = 50
     "number of samples"
 
     degree: int = 3
@@ -65,7 +64,6 @@ class Airfoil:
         self.num_thickness_dist_pnts = len(self.upper_thick_dist) + 4
         self.thickness_dist_sampling = np.linspace(0, 1, self.num_thickness_dist_pnts, endpoint=True)
         self.sampling = np.linspace(0, 1, self.num_samples, endpoint=True)
-
     @cached_property
     def axial_chord_length(self):
         "axial chord length (length)"
@@ -139,7 +137,7 @@ class Airfoil:
         "airfoil coordinates"
         upper_side = self.upper_side_bspline(self.sampling)
         lower_side = self.lower_side_bspline(self.sampling)
-        return np.concatenate([upper_side, np.flip(lower_side, axis=0)])
+        return np.concatenate([upper_side[1:-1], np.flip(lower_side, axis=0)])
 
     def visualize(
         self,
