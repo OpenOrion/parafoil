@@ -12,6 +12,6 @@ setup(
    install_requires=[
     "numpy",
     "scipy",
-    "git+https://github.com/Turbodesigner/ezmesh.git#egg=ezmesh"
+    "ezmesh @ git+https://github.com/Turbodesigner/ezmesh.git"
    ]
 )
