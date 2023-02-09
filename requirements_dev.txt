@@ -5,3 +5,4 @@ matplotlib
 
 numpy
 scipy
+git+https://github.com/Turbodesigner/ezmesh.git#egg=ezmesh
