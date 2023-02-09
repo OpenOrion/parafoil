@@ -31,8 +31,7 @@ pip install git+https://github.com/Turbodesigner/parafoil.git#egg=parafoil
 ## Airfoil
 ```python
 import numpy as np
-from parafoil.airfoil import Airfoil
-from parafoil.passage import PassageBuilder
+from parafoil import Airfoil, PassageBuilder
 
 airfoil = Airfoil(
     inlet_angle=np.radians(40.0),
