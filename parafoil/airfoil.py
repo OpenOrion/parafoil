@@ -60,10 +60,18 @@ class Airfoil:
     leading_ctrl_pnt: List[float] = field(default_factory=lambda: [0.0, 0.0])
     "leading control point (length)"
 
+    is_cosine_sampling: bool = True
+    "use cosine sampling"
+
     def __post_init__(self):
         self.num_thickness_dist_pnts = len(self.upper_thick_dist) + 4
         self.thickness_dist_sampling = np.linspace(0, 1, self.num_thickness_dist_pnts, endpoint=True)
-        self.sampling = np.linspace(0, 1, self.num_samples, endpoint=True)
+        
+        if self.is_cosine_sampling:
+            beta = np.linspace(0.0,np.pi, self.num_samples, endpoint=True)
+            self.sampling = 0.5*(1.0-np.cos(beta))
+        else:
+            self.sampling = np.linspace(0.0, 1.0, self.num_samples, endpoint=True)
     @cached_property
     def axial_chord_length(self):
         "axial chord length (length)"

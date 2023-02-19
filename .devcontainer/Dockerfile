@@ -6,7 +6,7 @@ ARG NODE_VERSION="none"
 RUN if [ "${NODE_VERSION}" != "none" ]; then su vscode -c "umask 0002 && . /usr/local/share/nvm/nvm.sh && nvm install ${NODE_VERSION} 2>&1"; fi
 
 RUN apt-get update -y && \
-  apt install -y libgl1-mesa-glx && \
+  apt install -y libgl1-mesa-glx libglu1-mesa libxcursor1 libxinerama1 && \
   apt-get clean && \
   rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
