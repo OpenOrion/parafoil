@@ -1,2 +1,2 @@
 from .airfoil import Airfoil
-from .passage import Passage, PassageBuilder
+from .passage import Passage
