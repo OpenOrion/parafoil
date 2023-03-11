@@ -138,7 +138,7 @@ class Passage:
             boundary_layer = BoundaryLayer(
                 hwall_n=boundary_wall_mesh_size,
                 thickness=boundary_layer_thickness,
-                quads=True,
+                is_quad_mesh=True,
                 intersect_metrics=False
             )
 
