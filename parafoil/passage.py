@@ -42,7 +42,7 @@ class Passage:
         return self.spacing * self.num_blades
 
     @cached_property
-    def coords(self):
+    def coords(self) -> npt.NDArray[np.float64]:
         return np.concatenate((self.outline.top_coords, self.outline.bottom_coords))
 
     @cached_property
@@ -62,15 +62,15 @@ class Passage:
             line_slope_start_coord: Optional[npt.NDArray[np.float64]] = np.array([self.leading_edge_gap, 0])
             
             is_increasing = passage_bspline_coords[1][1] > start_coord[1]
-            for i, coord in enumerate(passage_bspline_coords[1:]):
+            for coord in passage_bspline_coords[1:]:
                 if is_increasing and coord[1] <= start_coord[1]:
                     line_slope_start_coord = coord
                     break
                 elif not is_increasing and coord[1] >= start_coord[1]:
                     line_slope_start_coord = coord
                     break
-                
-            outline_coords = np.concatenate([
+            
+            outline_coords: npt.NDArray[np.float64] = np.concatenate([
                 np.array([[0, line_slope_start_coord[1]], line_slope_start_coord]),
                 np.array([camber_coords[-1]]),
                 np.array([camber_coords[-1] + np.array([self.trailing_edge_gap, 0])])    # type: ignore
@@ -121,18 +121,11 @@ class Passage:
 
 
         with Geometry() as geometry:
-            top_outline = self.outline.top_coords
-            bottom_outline = self.outline.bottom_coords
-
-            passage_curve_loop = CurveLoop(
-                self.coords,
-                mesh_size=passage_mesh_size,
-                labels={
-                    top_label: range(0, len(top_outline)-1),
-                    outlet_label: [len(top_outline)-1],
-                    bottom_label: range(len(top_outline), len(top_outline)+len(bottom_outline)-1),
-                    inlet_label: [len(top_outline)+len(bottom_outline)-1],
-                },
+            passage_curve_loop = CurveLoop.from_coords(
+                self.coords, 
+                mesh_size = passage_mesh_size,
+                groups=[self.outline.top_coords, self.outline.bottom_coords],
+                labels=[top_label, outlet_label, bottom_label, inlet_label],
             )
 
             boundary_layer = BoundaryLayer(
@@ -145,18 +138,20 @@ class Passage:
             if isinstance(airfoil_label, List):
                 assert len(airfoil_label) == len(self.airfoils_coords)
 
+
+
             airfoil_curve_loops = [
-                CurveLoop(
-                    airfoil_coords,
-                    mesh_size=airfoil_mesh_size,
-                    labels={airfoil_label[i] if isinstance(airfoil_label, List) else airfoil_label: "all"},
+                CurveLoop.from_coords(
+                    airfoil_coords, 
+                    mesh_size = airfoil_mesh_size, 
+                    labels=airfoil_label[i] if isinstance(airfoil_label, List) else airfoil_label,
                     fields=[boundary_layer],
                 )
                 for i, airfoil_coords in enumerate(self.airfoils_coords)
             ]
 
             surface = PlaneSurface(
-                passage_curve_loop,
+                outlines=[passage_curve_loop],
                 holes=airfoil_curve_loops,
                 label=surface_label
             )
