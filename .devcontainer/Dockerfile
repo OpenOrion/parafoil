@@ -6,10 +6,11 @@ ARG NODE_VERSION="none"
 RUN if [ "${NODE_VERSION}" != "none" ]; then su vscode -c "umask 0002 && . /usr/local/share/nvm/nvm.sh && nvm install ${NODE_VERSION} 2>&1"; fi
 
 RUN apt-get update -y && \
-  apt install -y libgl1-mesa-glx libglu1-mesa libxcursor1 libxinerama1 && \
+  apt install -y libgl1-mesa-glx libglu1-mesa libxcursor1 libxinerama1 libopenmpi-dev && \
   apt-get clean && \
   rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 # [Optional] If your pip requirements rarely change, uncomment this section to add them to the image.
 COPY requirements_dev.txt /tmp/pip-tmp/
 RUN pip install -r /tmp/pip-tmp/requirements_dev.txt && rm -rf /tmp/pip-tmp
+RUN pip install git+https://github.com/Turbodesigner/paraflow.git#egg=paraflow
