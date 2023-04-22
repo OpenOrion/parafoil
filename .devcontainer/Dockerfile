@@ -13,4 +13,3 @@ RUN apt-get update -y && \
 # [Optional] If your pip requirements rarely change, uncomment this section to add them to the image.
 COPY requirements_dev.txt /tmp/pip-tmp/
 RUN pip install -r /tmp/pip-tmp/requirements_dev.txt && rm -rf /tmp/pip-tmp
-RUN pip install git+https://github.com/Turbodesigner/paraflow.git#egg=paraflow

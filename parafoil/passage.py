@@ -140,7 +140,7 @@ class AirfoilPassage(Passage):
                 geometry.write(output_path)
             return geometry.generate(surface)
 
-    def get_config(self, inflow: FlowState, working_directory: str, id: str):
+    def get_config(self, inflow: FlowState, target_outflow: FlowState, working_directory: str, id: str):
         return {
             "SOLVER": "RANS",
             "KIND_TURB_MODEL": "SST",
@@ -242,10 +242,12 @@ class AxialTurboPassage(Passage):
 
     def __post_init__(self):
         self.inlet_length = self.inflow_passage.inlet_length
+        self.outflow_passage.offset=[np.max(self.inflow_passage.coords[:, 0]), 0] # type: ignore
+
         self.outlet_length = self.outflow_passage.outlet_length
 
     def get_config(self, inflow: FlowState, target_outflow: FlowState, working_directory: str, id: str):
-        inflow_config = self.inflow_passage.get_config(inflow, working_directory, id)
+        inflow_config = self.inflow_passage.get_config(inflow, target_outflow, working_directory, id)
         inflow_mesh_params = self.inflow_passage.mesh_params
         outflow_mesh_params = self.outflow_passage.mesh_params
         return {
@@ -270,8 +272,8 @@ class AxialTurboPassage(Passage):
             "MARKER_HEATFLUX": f"( {inflow_mesh_params.airfoil_label}, 0.0, {outflow_mesh_params.airfoil_label}, 0.0)",
             "MARKER_PERIODIC": f"( {inflow_mesh_params.bottom_label}, {inflow_mesh_params.top_label}, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, {self.inflow_passage.spacing}, 0.0, {outflow_mesh_params.bottom_label}, {outflow_mesh_params.top_label}, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, {self.outflow_passage.spacing}, 0.0)",
             "MARKER_TURBOMACHINERY": f"({inflow_mesh_params.inlet_label}, {inflow_mesh_params.outlet_label}, {outflow_mesh_params.inlet_label}, {outflow_mesh_params.outlet_label})",
-            "MARKER_MIXINGPLANE_INTERFACE": f"({inflow_mesh_params.outlet_label}, {inflow_mesh_params.inlet_label})",
-            "MARKER_GILES": f"({inflow_mesh_params.inlet_label}, TOTAL_CONDITIONS_PT, {inflow.total_state.P}, {inflow.total_state.T}, 1.0, 0.0, 0.0,1.0,1.0, {inflow_mesh_params.outlet_label}, MIXING_OUT, 0.0, 0.0, 0.0, 0.0, 0.0,1.0,1.0, {inflow_mesh_params.inlet_label}, MIXING_IN, 0.0, 0.0, 0.0, 0.0, 0.0,1.0, 1.0 {inflow_mesh_params.outlet_label}, STATIC_PRESSURE, {target_outflow.static_state.P}, 0.0, 0.0, 0.0, 0.0,1.0,1.0)",
+            "MARKER_ZONE_INTERFACE": f"({inflow_mesh_params.outlet_label}, {outflow_mesh_params.inlet_label})",
+            "MARKER_GILES": f"({inflow_mesh_params.inlet_label}, TOTAL_CONDITIONS_PT, {inflow.total_state.P}, {inflow.total_state.T}, 1.0, 0.0, 0.0,1.0,1.0, {inflow_mesh_params.outlet_label}, MIXING_OUT, 0.0, 0.0, 0.0, 0.0, 0.0,1.0,1.0, {outflow_mesh_params.inlet_label}, MIXING_IN, 0.0, 0.0, 0.0, 0.0, 0.0,1.0, 1.0 {outflow_mesh_params.outlet_label}, STATIC_PRESSURE, {target_outflow.static_state.P}, 0.0, 0.0, 0.0, 0.0,1.0,1.0)",
             "SPATIAL_FOURIER": "NO",
             "TURBOMACHINERY_KIND": "AXIAL AXIAL",
             "TURBULENT_MIXINGPLANE": "YES",
@@ -279,6 +281,9 @@ class AxialTurboPassage(Passage):
             "RAMP_OUTLET_PRESSURE_COEFF": "(140000.0, 10.0, 2000)",
             "MARKER_PLOTTING": f"({inflow_mesh_params.airfoil_label}, {outflow_mesh_params.airfoil_label})",
         }
+
+    def get_mesh(self):
+        return [self.inflow_passage.get_mesh(), self.outflow_passage.get_mesh()]
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
