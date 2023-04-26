@@ -140,25 +140,25 @@ class AirfoilPassage(Passage):
                 geometry.write(output_path)
             return geometry.generate(surface)
 
-    def get_config(self, inflow: FlowState, target_outflow: FlowState, working_directory: str, id: str):
+    def get_config(self, inlet_total_state: FlowState, outlet_static_state: FlowState, working_directory: str, id: str):
         return {
             "SOLVER": "RANS",
             "KIND_TURB_MODEL": "SST",
             "MATH_PROBLEM": "DIRECT",
             "RESTART_SOL": "NO",
             "SYSTEM_MEASUREMENTS": "SI",
-            "MACH_NUMBER": inflow.mach_number,
+            "MACH_NUMBER": inlet_total_state.mach_number,
             "AOA": 0.0,
             "SIDESLIP_ANGLE": 0.0,
             "INIT_OPTION": "TD_CONDITIONS",
             "FREESTREAM_OPTION": "TEMPERATURE_FS",
-            "FREESTREAM_PRESSURE": inflow.total_state.P,
-            "FREESTREAM_TEMPERATURE": inflow.total_state.T,
-            "FREESTREAM_DENSITY": inflow.total_state.rho_mass(),
+            "FREESTREAM_PRESSURE": inlet_total_state.P,
+            "FREESTREAM_TEMPERATURE": inlet_total_state.T,
+            "FREESTREAM_DENSITY": inlet_total_state.rho_mass(),
             "REF_DIMENSIONALIZATION": "DIMENSIONAL",
             "FLUID_MODEL": "IDEAL_GAS",
-            "GAMMA_VALUE": inflow.gamma,
-            "GAS_CONSTANT": inflow.gas_constant,
+            "GAMMA_VALUE": inlet_total_state.gamma,
+            "GAS_CONSTANT": inlet_total_state.gas_constant,
             "VISCOSITY_MODEL": "SUTHERLAND",
             "MU_REF": 1.716E-5,
             "MU_T_REF": 273.15,
@@ -200,7 +200,7 @@ class AirfoilPassage(Passage):
             "SURFACE_FILENAME":  f"{working_directory}/surface_flow{id}",
             "CONV_FILENAME": f"{working_directory}/history{id}",
             "OUTPUT_WRT_FREQ": 1000,
-            "SCREEN_OUTPUT": "(INNER_ITER, RMS_DENSITY, RMS_TKE, RMS_DISSIPATION, LIFT, DRAG)",
+            "SCREEN_OUTPUT": "OUTER_ITER, AVG_BGS_RES[0], AVG_BGS_RES[1], RMS_DENSITY[0], RMS_ENERGY[0], RMS_DENSITY[1], RMS_ENERGY[1], SURFACE_TOTAL_PRESSURE[1]"
         }
 
     def visualize(self, title: str = "Passage"):
@@ -246,8 +246,8 @@ class AxialTurboPassage(Passage):
 
         self.outlet_length = self.outflow_passage.outlet_length
 
-    def get_config(self, inflow: FlowState, target_outflow: FlowState, working_directory: str, id: str):
-        inflow_config = self.inflow_passage.get_config(inflow, target_outflow, working_directory, id)
+    def get_config(self, inlet_total_state: FlowState, outlet_static_state: FlowState, working_directory: str, id: str):
+        inflow_config = self.inflow_passage.get_config(inlet_total_state, outlet_static_state, working_directory, id)
         inflow_mesh_params = self.inflow_passage.mesh_params
         outflow_mesh_params = self.outflow_passage.mesh_params
         return {
@@ -258,22 +258,24 @@ class AxialTurboPassage(Passage):
                     **({
                         "GRID_MOVEMENT": "STEADY_TRANSLATION",
                         "MACH_MOTION": 0.35,
-                        "TRANSLATION_RATE": f"0.0 {inflow.translation_velocity} 0.0",
-                    } if inflow.translation_velocity else {"GRID_MOVEMENT": "NONE"})
+                        "TRANSLATION_RATE": f"0.0 {inlet_total_state.translation_velocity} 0.0",
+                    } if inlet_total_state.translation_velocity else {"GRID_MOVEMENT": "NONE"})
                 },
                 "zone_2.cfg": {
                     **({
                         "GRID_MOVEMENT": "STEADY_TRANSLATION",
                         "MACH_MOTION": 0.35,
-                        "TRANSLATION_RATE": f"0.0 {target_outflow.translation_velocity} 0.0",
-                    } if target_outflow.translation_velocity else {"GRID_MOVEMENT": "NONE"})
+                        "TRANSLATION_RATE": f"0.0 {outlet_static_state.translation_velocity} 0.0",
+                    } if outlet_static_state.translation_velocity else {"GRID_MOVEMENT": "NONE"})
                 }
             },
             "MARKER_HEATFLUX": f"( {inflow_mesh_params.airfoil_label}, 0.0, {outflow_mesh_params.airfoil_label}, 0.0)",
             "MARKER_PERIODIC": f"( {inflow_mesh_params.bottom_label}, {inflow_mesh_params.top_label}, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, {self.inflow_passage.spacing}, 0.0, {outflow_mesh_params.bottom_label}, {outflow_mesh_params.top_label}, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, {self.outflow_passage.spacing}, 0.0)",
             "MARKER_TURBOMACHINERY": f"({inflow_mesh_params.inlet_label}, {inflow_mesh_params.outlet_label}, {outflow_mesh_params.inlet_label}, {outflow_mesh_params.outlet_label})",
-            "MARKER_ZONE_INTERFACE": f"({inflow_mesh_params.outlet_label}, {outflow_mesh_params.inlet_label})",
-            "MARKER_GILES": f"({inflow_mesh_params.inlet_label}, TOTAL_CONDITIONS_PT, {inflow.total_state.P}, {inflow.total_state.T}, 1.0, 0.0, 0.0,1.0,1.0, {inflow_mesh_params.outlet_label}, MIXING_OUT, 0.0, 0.0, 0.0, 0.0, 0.0,1.0,1.0, {outflow_mesh_params.inlet_label}, MIXING_IN, 0.0, 0.0, 0.0, 0.0, 0.0,1.0, 1.0 {outflow_mesh_params.outlet_label}, STATIC_PRESSURE, {target_outflow.static_state.P}, 0.0, 0.0, 0.0, 0.0,1.0,1.0)",
+            "MARKER_ANALYZE": "(outflow)",
+
+            "MARKER_MIXINGPLANE_INTERFACE": f"({inflow_mesh_params.outlet_label}, {outflow_mesh_params.inlet_label})",
+            "MARKER_GILES": f"({inflow_mesh_params.inlet_label}, TOTAL_CONDITIONS_PT, {inlet_total_state.P}, {inlet_total_state.T}, 1.0, 0.0, 0.0,1.0,1.0, {inflow_mesh_params.outlet_label}, MIXING_OUT, 0.0, 0.0, 0.0, 0.0, 0.0,1.0,1.0, {outflow_mesh_params.inlet_label}, MIXING_IN, 0.0, 0.0, 0.0, 0.0, 0.0,1.0, 1.0 {outflow_mesh_params.outlet_label}, STATIC_PRESSURE, {outlet_static_state.P}, 0.0, 0.0, 0.0, 0.0,1.0,1.0)",
             "SPATIAL_FOURIER": "NO",
             "TURBOMACHINERY_KIND": "AXIAL AXIAL",
             "TURBULENT_MIXINGPLANE": "YES",
