@@ -1,2 +1,2 @@
 from .airfoil import Airfoil
-from .passage import Passage
+from .passage import AirfoilPassage, MeshParameters, AxialTurboPassage

@@ -72,14 +72,16 @@ class Airfoil:
             self.sampling = 0.5*(1.0-np.cos(beta))
         else:
             self.sampling = np.linspace(0.0, 1.0, self.num_samples, endpoint=True)
+    
+        self.camber_bspline = get_bspline(self.camber_ctrl_pnts, self.degree)
+
     @cached_property
     def axial_chord_length(self):
         "axial chord length (length)"
         return self.chord_length*np.cos(self.stagger_angle)
 
     @cached_property
-    def camber_bspline(self):
-        "camber line bspline"
+    def camber_ctrl_pnts(self):
         p_le = np.array(self.leading_ctrl_pnt)
 
         p_te = p_le + np.array([
@@ -99,8 +101,7 @@ class Airfoil:
             self.chord_length*np.sin(self.outlet_angle)
         ])
 
-        ctrl_pnts = np.vstack((p_le, p1, p2, p_te))
-        return get_bspline(ctrl_pnts, self.degree)
+        return np.vstack((p_le, p1, p2, p_te))
 
     @cached_property
     def upper_side_bspline(self):
@@ -156,12 +157,10 @@ class Airfoil:
             layout=go.Layout(title=go.layout.Title(text="Airfoil"))
         )
         if include_camber_ctrl_pnts:
-            camber_ctr_pnts = self.camber_bspline.c
             fig.add_trace(go.Scatter(
-                x=camber_ctr_pnts[:, 0],
-                y=camber_ctr_pnts[:, 1],
+                x=self.camber_ctrl_pnts[:, 0],
+                y=self.camber_ctrl_pnts[:, 1],
                 name=f"Camber Control Points"
-
             ))
 
         if include_camber:

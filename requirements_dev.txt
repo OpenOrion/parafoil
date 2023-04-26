@@ -6,3 +6,4 @@ matplotlib
 numpy
 scipy
 git+https://github.com/Turbodesigner/ezmesh.git#egg=ezmesh
+git+https://github.com/Turbodesigner/paraflow.git#egg=paraflow
