@@ -1,2 +1,2 @@
-from .airfoil import Airfoil
-from .passage import AirfoilPassage, MeshParameters, AxialTurboPassage
+from .airfoils import Airfoil, BSplineAirfoil, CoordAirfoil
+from .passages import CircularPassage, CircularMeshParameters, TurboRowPassage, TurboStagePassage, TurboMeshParameters
