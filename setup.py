@@ -8,7 +8,7 @@ setup(
    description='the open source parametric airfoil generator',
    author='Afshawn Lotfi',
    author_email='',
-   packages=['parafoil'],
+   packages=['parafoil', 'parafoil.airfoils', 'parafoil.passages'],
    install_requires=[
     "numpy",
     "scipy",
