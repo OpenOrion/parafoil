@@ -1,3 +1,5 @@
+*.csv
+*.pickle
 TURBOMACHINERY/
 simulation/
 *.su2

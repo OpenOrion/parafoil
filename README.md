@@ -26,6 +26,12 @@ ParaFoil is a declarative tool that parametrically generates turbomachinery and 
 pip install git+https://github.com/Turbodesigner/parafoil.git#egg=parafoil
 ```
 
+## Other Versions
+```
+# Version 1
+pip install git+https://github.com/Turbodesigner/parafoil.git@1.0.0#egg=parafoil
+```
+
 # Example
 
 ## Airfoil

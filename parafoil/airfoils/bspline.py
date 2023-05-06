@@ -4,8 +4,8 @@ from typing import List
 import numpy as np
 import plotly.graph_objects as go
 import numpy.typing as npt
-from parafoil.bspline import get_bspline
-
+from parafoil.utils import get_bspline, get_sampling
+from .airfoil import Airfoil
 
 def get_thickness_dist_ctrl_pnts(
     camber: npt.NDArray,
@@ -24,7 +24,7 @@ def get_thickness_dist_ctrl_pnts(
 
 
 @dataclass
-class Airfoil:
+class BSplineAirfoil(Airfoil):
     "parametric airfoil using B-splines"
 
     inlet_angle: float
@@ -54,31 +54,19 @@ class Airfoil:
     num_samples: int = 50
     "number of samples"
 
-    degree: int = 3
-    "degree of bspline"
+    is_cosine_sampling: bool = True
+    "use cosine sampling"
 
     leading_ctrl_pnt: List[float] = field(default_factory=lambda: [0.0, 0.0])
     "leading control point (length)"
 
-    is_cosine_sampling: bool = True
-    "use cosine sampling"
-
     def __post_init__(self):
+        self.degree = 3
         self.num_thickness_dist_pnts = len(self.upper_thick_dist) + 4
-        self.thickness_dist_sampling = np.linspace(0, 1, self.num_thickness_dist_pnts, endpoint=True)
-        
-        if self.is_cosine_sampling:
-            beta = np.linspace(0.0,np.pi, self.num_samples, endpoint=True)
-            self.sampling = 0.5*(1.0-np.cos(beta))
-        else:
-            self.sampling = np.linspace(0.0, 1.0, self.num_samples, endpoint=True)
-    
+        self.thickness_dist_sampling = np.linspace(0, 1, self.num_thickness_dist_pnts, endpoint=True)    
         self.camber_bspline = get_bspline(self.camber_ctrl_pnts, self.degree)
-
-    @cached_property
-    def axial_chord_length(self):
-        "axial chord length (length)"
-        return self.chord_length*np.cos(self.stagger_angle)
+        self.sampling = get_sampling(self.num_samples, self.is_cosine_sampling)
+        self.axial_chord_length =  self.chord_length*np.cos(self.stagger_angle)
 
     @cached_property
     def camber_ctrl_pnts(self):
@@ -104,7 +92,7 @@ class Airfoil:
         return np.vstack((p_le, p1, p2, p_te))
 
     @cached_property
-    def upper_side_bspline(self):
+    def top_coords(self):
         "upper side bspline"
         thickness_dist = np.vstack(self.upper_thick_dist)
         ctrl_pnts = get_thickness_dist_ctrl_pnts(
@@ -114,10 +102,11 @@ class Airfoil:
             self.thickness_dist_sampling,
             self.degree
         )
-        return get_bspline(ctrl_pnts, self.degree)
-
+        bspline =  get_bspline(ctrl_pnts, self.degree)
+        return bspline(self.sampling)
+    
     @cached_property
-    def lower_side_bspline(self):
+    def bottom_coords(self):
         "lower side bspline"
         thickness_dist = -np.vstack(self.lower_thick_dist)
         ctrl_pnts = get_thickness_dist_ctrl_pnts(
@@ -127,7 +116,8 @@ class Airfoil:
             self.thickness_dist_sampling,
             self.degree
         )
-        return get_bspline(ctrl_pnts, self.degree)
+        bspline = get_bspline(ctrl_pnts, self.degree)
+        return bspline(self.sampling)
 
     @cached_property
     def camber_coords(self) -> npt.NDArray:
@@ -141,12 +131,9 @@ class Airfoil:
         normal = np.array([-camber_prime[:, 1], camber_prime[:, 0]]) / np.linalg.norm(camber_prime, axis=1)
         return normal.T
 
-    @cached_property
-    def coords(self) -> npt.NDArray:
+    def get_coords(self):
         "airfoil coordinates"
-        upper_side = self.upper_side_bspline(self.sampling)
-        lower_side = self.lower_side_bspline(self.sampling)
-        return np.concatenate([upper_side[1:-1], np.flip(lower_side, axis=0)])
+        return np.concatenate([self.top_coords[1:-1], np.flip(self.bottom_coords, axis=0)])
 
     def visualize(
         self,
@@ -171,7 +158,7 @@ class Airfoil:
                 name=f"Camber"
             ))
 
-        coords = self.coords
+        coords = self.get_coords()
         fig.add_trace(go.Scatter(
             x=coords[:, 0],
             y=coords[:, 1],
