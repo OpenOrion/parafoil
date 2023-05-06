@@ -1,11 +1,11 @@
 from dataclasses import asdict, dataclass, field
+from functools import cached_property
 from typing import Any, Dict, Optional
 import numpy as np
 from plotly import graph_objects as go
 from paraflow import Passage, FlowState
 from parafoil.airfoils import Airfoil
 from ezmesh import Geometry, CurveLoop, PlaneSurface
-
 from parafoil.utils import get_sampling
 
 
@@ -40,38 +40,43 @@ class CircularPassage(Passage):
         y = self.radius * np.sin(theta)
         return np.column_stack((x, y))
 
-    def get_mesh(
-        self,
-        output_path: Optional[str] = None
-    ):
+    @cached_property
+    def surface(self):
         if self.mesh_params.airfoil_mesh_size is None:
             self.mesh_params.airfoil_mesh_size = 0.1 * self.airfoil.chord_length
         if self.mesh_params.passage_mesh_size is None:
             self.mesh_params.passage_mesh_size = self.airfoil.chord_length
 
+        airfoil_coords = self.airfoil.get_coords()
+        airfoil_curve_loop = CurveLoop.from_coords(
+            airfoil_coords,
+            mesh_size=self.mesh_params.airfoil_mesh_size,
+            label=self.mesh_params.airfoil_label,
+        )
+
+        farfield_coords = self.get_coords()
+        farfield_curve_loop = CurveLoop.from_coords(
+            farfield_coords,
+            mesh_size=self.mesh_params.passage_mesh_size,
+            label=self.mesh_params.farfield_label,
+            holes=[airfoil_curve_loop]
+        )
+
+
+
+        return PlaneSurface(
+            outlines=[farfield_curve_loop],
+        )
+
+    def get_mesh(
+        self,
+        output_path: Optional[str] = None
+    ):
         with Geometry() as geometry:
-            farfield_coords = self.get_coords()
-            farfield_curve_loop = CurveLoop.from_coords(
-                farfield_coords,
-                mesh_size=self.mesh_params.passage_mesh_size,
-                labels=self.mesh_params.farfield_label,
-            )
-
-            airfoil_coords = self.airfoil.get_coords()
-            airfoil_curve_loop = CurveLoop.from_coords(
-                airfoil_coords,
-                mesh_size=self.mesh_params.airfoil_mesh_size,
-                labels=self.mesh_params.airfoil_label,
-            )
-
-            surface = PlaneSurface(
-                outlines=[farfield_curve_loop],
-                holes=[airfoil_curve_loop]
-            )
             if output_path is not None:
                 geometry.write(output_path)
 
-            mesh = geometry.generate(surface)
+            mesh = geometry.generate(self.surface)
             return mesh
 
     def visualize(self, title: str = "Passage"):
@@ -100,13 +105,20 @@ class CircularPassage(Passage):
         fig.layout.yaxis.scaleanchor = "x"  # type: ignore
         fig.show()
 
-    def get_config(self, inlet_total_state: FlowState, working_directory: str, id: str, target_outlet_static_state: Optional[FlowState] = None) -> Dict[str, Any]:  # type: ignore
+    def get_config(
+            self, 
+            inlet_total_state: FlowState, 
+            working_directory: str, 
+            id: str, 
+            target_outlet_static_state: Optional[FlowState] = None, 
+            angle_of_attack: float = 0.0
+        ) -> Dict[str, Any]:
         return {
             "SOLVER": "EULER",
             "MATH_PROBLEM": "DIRECT",
             "RESTART_SOL": "NO",
-            "MACH_NUMBER": 0.8,
-            "AOA": 1.25,
+            "MACH_NUMBER": inlet_total_state.mach_number,
+            "AOA": angle_of_attack,
             "FREESTREAM_PRESSURE": inlet_total_state.P,
             "FREESTREAM_TEMPERATURE": inlet_total_state.T,
             "GAMMA_VALUE": inlet_total_state.gamma,

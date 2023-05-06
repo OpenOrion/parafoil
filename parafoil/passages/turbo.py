@@ -4,11 +4,10 @@ from typing import Any, Dict, List, Literal, Optional, Union
 import numpy as np
 import numpy.typing as npt
 from plotly import graph_objects as go
-from parafoil.airfoils import Airfoil, BSplineAirfoil
+from parafoil.airfoils import BSplineAirfoil
 from parafoil.utils import get_bspline, get_sampling
 from ezmesh import Geometry, CurveLoop, PlaneSurface, BoundaryLayerField
 from paraflow import Passage, FlowState
-
 
 @dataclass
 class TurboMeshParameters:
@@ -91,10 +90,8 @@ class TurboRowPassage(Passage):
             airfoils_coords.append(airfoil_offseted_coords)
         return airfoils_coords
 
-    def get_mesh(
-        self,
-        output_path: Optional[str] = None
-    ):
+    @cached_property
+    def surface(self):
         if self.mesh_params.airfoil_mesh_size is None:
             self.mesh_params.airfoil_mesh_size = 0.02 * self.airfoil.chord_length
         if self.mesh_params.boundary_layer_thickness is None:
@@ -103,50 +100,60 @@ class TurboRowPassage(Passage):
             self.mesh_params.boundary_wall_mesh_size = 0.001 * self.airfoil.chord_length
         if self.mesh_params.passage_mesh_size is None:
             self.mesh_params.passage_mesh_size = 0.05 * self.airfoil.chord_length
+        
+        airfoils_coords = self.airfoils_coords
+        if isinstance(self.mesh_params.airfoil_label, List):
+            assert len(self.mesh_params.airfoil_label) == len(airfoils_coords)
 
-        with Geometry() as geometry:
-            passage_ctrl_pnts = self.get_ctrl_pnts()
-            passage_curve_loop = CurveLoop.from_coords(
-                [
-                    ("BSpline", passage_ctrl_pnts + np.array([0, self.total_spacing/2]) + self.offset),
-                    ("BSpline", passage_ctrl_pnts[::-1] + np.array([0, -self.total_spacing/2]) + self.offset)
+        airfoil_curve_loops = [
+            CurveLoop.from_coords(
+                airfoil_coords,
+                mesh_size=self.mesh_params.airfoil_mesh_size,
+                curve_labels=self.mesh_params.airfoil_label[i] if isinstance(self.mesh_params.airfoil_label, List) else self.mesh_params.airfoil_label,
+                fields=[
+                    BoundaryLayerField(
+                        hwall_n=self.mesh_params.boundary_wall_mesh_size,
+                        thickness=self.mesh_params.boundary_layer_thickness,
+                        is_quad_mesh=True,
+                        intersect_metrics=False
+                    )
                 ],
-                mesh_size=self.mesh_params.passage_mesh_size,
-                labels=[self.mesh_params.top_label, self.mesh_params.outlet_label, self.mesh_params.bottom_label, self.mesh_params.inlet_label],
             )
+            for i, airfoil_coords in enumerate(airfoils_coords)
+        ]
+        passage_ctrl_pnts = self.get_ctrl_pnts()
+        passage_curve_loop = CurveLoop.from_coords(
+            [
+                ("BSpline", passage_ctrl_pnts + np.array([0, self.total_spacing/2]) + self.offset),
+                ("BSpline", passage_ctrl_pnts[::-1] + np.array([0, -self.total_spacing/2]) + self.offset)
+            ],
+            mesh_size=self.mesh_params.passage_mesh_size,
+            curve_labels=[self.mesh_params.top_label, self.mesh_params.outlet_label, self.mesh_params.bottom_label, self.mesh_params.inlet_label],
+            holes=airfoil_curve_loops
+        )
 
-            if isinstance(self.mesh_params.airfoil_label, List):
-                assert len(self.mesh_params.airfoil_label) == len(self.airfoils_coords)
+        return PlaneSurface(outlines=[passage_curve_loop])
 
-            airfoil_curve_loops = [
-                CurveLoop.from_coords(
-                    airfoil_coords,
-                    mesh_size=self.mesh_params.airfoil_mesh_size,
-                    labels=self.mesh_params.airfoil_label[i] if isinstance(self.mesh_params.airfoil_label, List) else self.mesh_params.airfoil_label,
-                    fields=[
-                        BoundaryLayerField(
-                            hwall_n=self.mesh_params.boundary_wall_mesh_size,
-                            thickness=self.mesh_params.boundary_layer_thickness,
-                            is_quad_mesh=True,
-                            intersect_metrics=False
-                        )
-                    ],
-                )
-                for i, airfoil_coords in enumerate(self.airfoils_coords)
-            ]
-
-            surface = PlaneSurface(
-                outlines=[passage_curve_loop],
-                holes=airfoil_curve_loops
-            )
+    def get_mesh(
+        self,
+        output_path: Optional[str] = None
+    ):
+        with Geometry() as geometry:
             if output_path is not None:
                 geometry.write(output_path)
 
-            mesh = geometry.generate(surface)
+            mesh = geometry.generate(self.surface)
             # mesh.add_target_point(f"mid_{self.mesh_params.outlet_label}", self.mesh_params.outlet_label, 0.5)
             return mesh
 
-    def get_config(self, inlet_total_state: FlowState, working_directory: str, id: str, target_outlet_static_state: FlowState):
+    def get_config(
+        self,
+        inlet_total_state: FlowState,
+        working_directory: str,
+        id: str,
+        target_outlet_static_state: Optional[FlowState] = None,
+        angle_of_attack: float = 0.0
+    ) -> Dict[str, Any]:
         return {
             "SOLVER": "RANS",
             "KIND_TURB_MODEL": "SST",
@@ -154,7 +161,7 @@ class TurboRowPassage(Passage):
             "RESTART_SOL": "NO",
             "SYSTEM_MEASUREMENTS": "SI",
             "MACH_NUMBER": inlet_total_state.mach_number,
-            "AOA": 0.0,
+            "AOA": angle_of_attack,
             "SIDESLIP_ANGLE": 0.0,
             "INIT_OPTION": "TD_CONDITIONS",
             "FREESTREAM_OPTION": "TEMPERATURE_FS",
@@ -250,8 +257,16 @@ class TurboStagePassage(Passage):
     def __post_init__(self):
         self.outflow_passage.offset = [self.inflow_passage.width, 0]
 
-    def get_config(self, inlet_total_state: FlowState, working_directory: str, id: str, target_outlet_static_state: FlowState):
-        inflow_config = self.inflow_passage.get_config(inlet_total_state, working_directory, id, target_outlet_static_state)
+    def get_config(
+        self,
+        inlet_total_state: FlowState,
+        working_directory: str,
+        id: str,
+        target_outlet_static_state: Optional[FlowState] = None,
+        angle_of_attack: float = 0.0
+    ) -> Dict[str, Any]:
+        assert target_outlet_static_state is not None, "Target outlet static state must be specified for turbo stage passage"
+        inflow_config = self.inflow_passage.get_config(inlet_total_state, working_directory, id, target_outlet_static_state, angle_of_attack)
         inflow_mesh_params = self.inflow_passage.mesh_params
         outflow_mesh_params = self.outflow_passage.mesh_params
         return {
@@ -287,6 +302,10 @@ class TurboStagePassage(Passage):
             "RAMP_OUTLET_PRESSURE_COEFF": "(140000.0, 10.0, 2000)",
             "MARKER_PLOTTING": f"({inflow_mesh_params.airfoil_label}, {outflow_mesh_params.airfoil_label})",
         }
+
+    @cached_property
+    def surface(self):
+        return [self.inflow_passage.surface, self.outflow_passage.surface]
 
     def get_mesh(self):
         return [self.inflow_passage.get_mesh(), self.outflow_passage.get_mesh()]
