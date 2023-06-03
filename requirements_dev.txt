@@ -9,3 +9,4 @@ git+https://github.com/Turbodesigner/ezmesh.git#egg=ezmesh
 git+https://github.com/Turbodesigner/paraflow.git#egg=paraflow
 git+https://github.com/Turbodesigner/pysu2.git#egg=pysu2
 mpi4py
+dacite

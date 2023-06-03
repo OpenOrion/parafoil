@@ -12,6 +12,7 @@ setup(
    install_requires=[
     "numpy",
     "scipy",
+    "dacite",
     "ezmesh @ git+https://github.com/Turbodesigner/ezmesh.git",
     "paraflow @ git+https://github.com/Turbodesigner/paraflow.git"
    ]

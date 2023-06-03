@@ -3,7 +3,7 @@ from functools import cached_property
 from typing import Any, Dict, Optional
 import numpy as np
 from plotly import graph_objects as go
-from paraflow import Passage, FlowState
+from paraflow import Passage, ConfigParameters
 from parafoil.airfoils import Airfoil
 from ezmesh import Geometry, CurveLoop, PlaneSurface
 from parafoil.utils import get_sampling
@@ -41,7 +41,7 @@ class CircularPassage(Passage):
         return np.column_stack((x, y))
 
     @cached_property
-    def surface(self):
+    def surfaces(self):
         if self.mesh_params.airfoil_mesh_size is None:
             self.mesh_params.airfoil_mesh_size = 0.1 * self.airfoil.chord_length
         if self.mesh_params.passage_mesh_size is None:
@@ -62,11 +62,11 @@ class CircularPassage(Passage):
             holes=[airfoil_curve_loop]
         )
 
-
-
-        return PlaneSurface(
-            outlines=[farfield_curve_loop],
-        )
+        return [
+            PlaneSurface(
+                outlines=[farfield_curve_loop],
+            )
+        ]
 
     def get_mesh(
         self,
@@ -76,7 +76,7 @@ class CircularPassage(Passage):
             if output_path is not None:
                 geometry.write(output_path)
 
-            mesh = geometry.generate(self.surface)
+            mesh = geometry.generate(self.surfaces[0])
             return mesh
 
     def visualize(self, title: str = "Passage"):
@@ -106,23 +106,21 @@ class CircularPassage(Passage):
         fig.show()
 
     def get_config(
-            self, 
-            inlet_total_state: FlowState, 
-            working_directory: str, 
-            id: str, 
-            target_outlet_static_state: Optional[FlowState] = None, 
-            angle_of_attack: float = 0.0
-        ) -> Dict[str, Any]:
+        self,
+        config_params: ConfigParameters,
+        working_directory: str,
+        id: str,
+    ) -> Dict[str, Any]:
         return {
             "SOLVER": "EULER",
             "MATH_PROBLEM": "DIRECT",
             "RESTART_SOL": "NO",
-            "MACH_NUMBER": inlet_total_state.mach_number,
-            "AOA": angle_of_attack,
-            "FREESTREAM_PRESSURE": inlet_total_state.P,
-            "FREESTREAM_TEMPERATURE": inlet_total_state.T,
-            "GAMMA_VALUE": inlet_total_state.gamma,
-            "GAS_CONSTANT": inlet_total_state.gas_constant,
+            "MACH_NUMBER": config_params.inlet_total_state.mach_number,
+            "AOA": config_params.angle_of_attack,
+            "FREESTREAM_PRESSURE": config_params.inlet_total_state.P,
+            "FREESTREAM_TEMPERATURE": config_params.inlet_total_state.T,
+            "GAMMA_VALUE": config_params.inlet_total_state.gamma,
+            "GAS_CONSTANT": config_params.inlet_total_state.gas_constant,
             "REF_ORIGIN_MOMENT_X": 0.25,
             "REF_ORIGIN_MOMENT_Y": 0.00,
             "REF_ORIGIN_MOMENT_Z": 0.00,
@@ -168,9 +166,10 @@ class CircularPassage(Passage):
             "MESH_FILENAME": f"{working_directory}/passage{id}.su2",
             "MESH_FORMAT": "SU2",
             "TABULAR_FORMAT": "CSV",
-            "VOLUME_FILENAME": f"{working_directory}/flow{id}",
+            "VOLUME_FILENAME": f"{working_directory}/flow{id}.vtu",
             "RESTART_FILENAME":  f"{working_directory}/restart_flow{id}.dat",
-            "SURFACE_FILENAME":  f"{working_directory}/surface_flow{id}",
+            "SURFACE_FILENAME":  f"{working_directory}/surface_flow{id}.vtu",
+            "CONV_FILENAME": f"{working_directory}/history{id}.csv",
             "OUTPUT_WRT_FREQ": 250,
         }
 
