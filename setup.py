@@ -13,6 +13,6 @@ setup(
     "numpy",
     "scipy",
     "ezmesh @ git+https://github.com/Turbodesigner/ezmesh.git",
-    "paraflow @ git+https://github.com/Turbodesigner/paraflow.git"
+    "paraflow @ git+https://github.com/Turbodesigner/paraflow.git@1.0.0"
    ]
 )
