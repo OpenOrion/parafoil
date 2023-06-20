@@ -26,7 +26,7 @@ def get_thickness_dist_ctrl_pnts(
 
 
 @dataclass
-class BSplineAirfoil(Airfoil):
+class CamberThicknessAirfoil(Airfoil):
     "parametric airfoil using B-splines"
 
     inlet_angle: float = field(metadata=opt_range(-np.pi/2, np.pi/2))
@@ -34,9 +34,6 @@ class BSplineAirfoil(Airfoil):
 
     outlet_angle: float = field(metadata=opt_range(-np.pi/2, np.pi/2))
     "outlet angle (rad)"
-
-    stagger_angle: float = field(metadata=opt_range(-np.pi/2, np.pi/2))
-    "stagger angle (rad)"
 
     upper_thick_prop: List[float] = field(metadata=opt_range(0, 1))
     "upper thickness proportion to chord length (length)"
@@ -52,6 +49,9 @@ class BSplineAirfoil(Airfoil):
 
     chord_length: float = field(default=1.0, metadata=opt_constant())
     "chord length (length)"
+
+    stagger_angle: Optional[float] = field(default=None, metadata=opt_range(-np.pi/2, np.pi/2))
+    "stagger angle (rad)"
 
     num_samples: int = 50
     "number of samples"
@@ -71,15 +71,20 @@ class BSplineAirfoil(Airfoil):
 
         assert self.upper_thick_dist is not None and self.lower_thick_dist is not None
 
+        if self.stagger_angle is None:
+            self.stagger_angle = (self.inlet_angle + self.outlet_angle)/2
+
         self.degree = 3
         self.num_thickness_dist_pnts = len(self.upper_thick_dist) + 4
         self.thickness_dist_sampling = np.linspace(0, 1, self.num_thickness_dist_pnts, endpoint=True)
         self.camber_bspline = get_bspline(self.camber_ctrl_pnts, self.degree)
         self.sampling = get_sampling(self.num_samples, self.is_cosine_sampling)
         self.axial_chord_length = self.chord_length*np.cos(self.stagger_angle)
+        self.chord_height = self.chord_length*np.sin(self.stagger_angle)
 
     @cached_property
     def camber_ctrl_pnts(self):
+        assert self.stagger_angle is not None, "stagger angle is not defined"
         p_le = np.array(self.leading_ctrl_pnt)
 
         p_te = p_le + np.array([
@@ -147,12 +152,13 @@ class BSplineAirfoil(Airfoil):
         bottom_bspline = get_bspline(self.bottom_ctrl_pnts, self.degree)
         bottom_coords = bottom_bspline(self.sampling)
 
-        return np.concatenate([top_coords[1:-1], np.flip(bottom_coords, axis=0)])
+        return np.concatenate([top_coords[1:-1], bottom_coords[::-1]])
 
     def visualize(
         self,
         include_camber=True,
         include_camber_ctrl_pnts=False,
+        filename: Optional[str] = None
     ):
         fig = go.Figure(
             layout=go.Layout(title=go.layout.Title(text="Airfoil"))
@@ -180,4 +186,7 @@ class BSplineAirfoil(Airfoil):
         ))
 
         fig.layout.yaxis.scaleanchor = "x"  # type: ignore
-        fig.show()
+        if filename:
+            fig.write_image(filename, width=500, height=500)
+        else:
+            fig.show()

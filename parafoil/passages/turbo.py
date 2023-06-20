@@ -1,10 +1,10 @@
 from dataclasses import asdict, dataclass, field
 from functools import cached_property
-from typing import Any, Dict, List, Literal, Optional, Union
+from typing import Any, Dict, List, Literal, Optional, Union, cast
 import numpy as np
 import numpy.typing as npt
 from plotly import graph_objects as go
-from parafoil.airfoils import BSplineAirfoil
+from parafoil.airfoils import CamberThicknessAirfoil
 from parafoil.metadata import opt_class, opt_range
 from ezmesh import CurveLoop, PlaneSurface, BoundaryLayerField, Geometry
 from paraflow import Passage, ConfigParameters, FlowState
@@ -25,7 +25,7 @@ class TurboMeshParameters:
 
 @dataclass
 class TurboRowPassage(Passage):
-    airfoil: BSplineAirfoil = field(metadata=opt_class())
+    airfoil: CamberThicknessAirfoil = field(metadata=opt_class())
     "airfoil for the passage"
 
     spacing_to_chord: float = field(metadata=opt_range(0.5, 1.2))
@@ -49,7 +49,7 @@ class TurboRowPassage(Passage):
     is_cosine_sampling: bool = True
     "use cosine sampling"
 
-    type: Literal["camber", "surface"] = "camber"
+    type: Literal["camber", "surface", "line"] = "camber"
     "type of the passage curve based on pressure or suction surface or camber"
 
     mesh_params: TurboMeshParameters = field(default_factory=TurboMeshParameters)
@@ -60,7 +60,8 @@ class TurboRowPassage(Passage):
         self.trailing_edge_gap = self.trailing_edge_gap_to_chord * self.airfoil.chord_length
         self.width = self.airfoil.axial_chord_length + self.leading_edge_gap + self.trailing_edge_gap
         self.spacing = self.airfoil.chord_length * self.spacing_to_chord
-
+        self.height = self.spacing * self.num_airfoils
+        
     @cached_property
     def total_spacing(self):
         return self.spacing * self.num_airfoils
@@ -72,14 +73,15 @@ class TurboRowPassage(Passage):
         if type == "camber":
             ctrl_coords = self.airfoil.camber_coords
         elif type == "top":
-            ctrl_coords = self.airfoil.top_ctrl_pnts[1:-1]
+            ctrl_coords = self.airfoil.top_ctrl_pnts
         elif type == "bottom":
-            ctrl_coords = self.airfoil.bottom_ctrl_pnts[1:-1]
+            ctrl_coords = self.airfoil.bottom_ctrl_pnts
 
-        return np.concatenate([
-            np.array([[0, 0], [self.leading_edge_gap, 0]]),
-            ctrl_coords + np.array([self.leading_edge_gap, 0]),
-            np.array([ctrl_coords[-1] + np.array([self.leading_edge_gap + self.trailing_edge_gap, 0])])    # type: ignore
+        return np.array([
+            [0, 0],
+            [self.leading_edge_gap, 0],
+            *(ctrl_coords + np.array([self.leading_edge_gap, 0])),
+            ctrl_coords[-1] + np.array([self.leading_edge_gap + self.trailing_edge_gap, 0]),
         ])
 
     @cached_property
@@ -129,35 +131,88 @@ class TurboRowPassage(Passage):
             for i, airfoil_coords in enumerate(airfoils_coords)
         ]
 
+        top_offset = np.array([0, self.total_spacing/2]) + self.offset
+        bottom_offset = np.array([0, -self.total_spacing/2]) + self.offset
+
         if self.type == "camber":
             top_ctrl_pnts = bottom_ctrl_pnts = self.get_ctrl_pnts("camber")
-        else:
+        else: 
             top_ctrl_pnts = self.get_ctrl_pnts("top")
             bottom_ctrl_pnts = self.get_ctrl_pnts("bottom")
 
+
+        # # plot points
+        # import matplotlib.pyplot as plt
+        # fig, ax = plt.subplots()
+        # new_top = top_ctrl_pnts + top_offset
+        # new_bottom = bottom_ctrl_pnts[::-1] + bottom_offset
+        # ax.plot(new_top[:, 0], new_top[:, 1], "r")
+        # ax.plot(new_bottom[:, 0], new_bottom[:, 1], "b")
+
+
+
+        coordsOrGroups = [
+            ("BSpline", top_ctrl_pnts + top_offset),
+            ("BSpline", bottom_ctrl_pnts[::-1] + bottom_offset)
+        ]
+        curve_labels=[self.mesh_params.top_label, self.mesh_params.outlet_label, self.mesh_params.bottom_label, self.mesh_params.inlet_label]
         passage_curve_loop = CurveLoop.from_coords(
-            [
-                ("BSpline", top_ctrl_pnts + np.array([0, self.total_spacing/2]) + self.offset),
-                ("BSpline", bottom_ctrl_pnts[::-1] + np.array([0, -self.total_spacing/2]) + self.offset)
-            ],
+            coordsOrGroups,
             mesh_size=self.mesh_params.passage_mesh_size,
-            curve_labels=[self.mesh_params.top_label, self.mesh_params.outlet_label, self.mesh_params.bottom_label, self.mesh_params.inlet_label],
+            curve_labels=curve_labels,
             holes=airfoil_curve_loops
         )
 
         return [PlaneSurface(outlines=[passage_curve_loop])]
 
-    def get_mesh(
-        self,
-        output_path: Optional[str] = None
-    ):
-        with Geometry() as geometry:
-            if output_path is not None:
-                geometry.write(output_path)
 
-            mesh = geometry.generate(self.surfaces[0])
-            # mesh.add_target_point(f"mid_{self.mesh_params.outlet_label}", self.mesh_params.outlet_label, 0.5)
-            return mesh
+    def visualize(self, title: str = "Passage"):
+        fig = go.Figure(
+            layout=go.Layout(title=go.layout.Title(text=title))
+        )
+        coords = self.get_coords()
+        fig.add_trace(go.Scatter(
+            x=coords[:, 0],
+            y=coords[:, 1],
+            fill="toself",
+            legendgroup="passage",
+            name=f"Passage"
+        ))
+
+        for i, airfoil_coord in enumerate(self.airfoils_coords):
+            fig.add_trace(go.Scatter(
+                x=airfoil_coord[:, 0],
+                y=airfoil_coord[:, 1],
+                fill="toself",
+                legendgroup="airfoil",
+                legendgrouptitle_text="Airfoils",
+                name=f"Airfoil {i+1}"
+
+            ))
+        fig.layout.yaxis.scaleanchor = "x"  # type: ignore
+        fig.show()
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass
+class TurboStagePassage(Passage):
+    inflow_passage: TurboRowPassage = field(metadata=opt_class())
+    "Passage with inflow boundary condition"
+
+    outflow_passage: TurboRowPassage = field(metadata=opt_class())
+    "Passage with outflow boundary condition"
+
+    def __post_init__(self):
+        self.outflow_passage.offset = [self.inflow_passage.width, 0]
+
+    @cached_property
+    def surfaces(self):
+        return [*self.inflow_passage.surfaces, *self.outflow_passage.surfaces]
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
 
     def get_config(
         self,
@@ -165,6 +220,10 @@ class TurboRowPassage(Passage):
         working_directory: str,
         id: str,
     ) -> Dict[str, Any]:
+        assert config_params.target_outlet_static_state is not None, "Target outlet static state must be specified for turbo stage passage"
+        inflow_mesh_params = self.inflow_passage.mesh_params
+        outflow_mesh_params = self.outflow_passage.mesh_params
+        turb_kind = "TURBINE" if config_params.inlet_total_state.linear_velocity is None else "COMPRESSOR"
         return {
             "SOLVER": "RANS",
             "KIND_TURB_MODEL": "SST",
@@ -187,9 +246,6 @@ class TurboRowPassage(Passage):
             "REF_ORIGIN_MOMENT_Z": 0.00,
             "REF_LENGTH": 1.0,
             "REF_AREA": 1.0,
-
-
-
             "REF_DIMENSIONALIZATION": "DIMENSIONAL",
             "FLUID_MODEL": "IDEAL_GAS",
             "GAMMA_VALUE": config_params.inlet_total_state.gamma,
@@ -235,63 +291,8 @@ class TurboRowPassage(Passage):
             "SURFACE_FILENAME":  f"{working_directory}/surface_flow{id}.vtu",
             "CONV_FILENAME": f"{working_directory}/config{id}.csv",
             "OUTPUT_WRT_FREQ": 1000,
-            "HISTORY_OUTPUT": "TURBO_PERF"
-            # "SCREEN_OUTPUT": "OUTER_ITER, AVG_BGS_RES[0], AVG_BGS_RES[1], RMS_DENSITY[0], RMS_ENERGY[0], RMS_DENSITY[1], RMS_ENERGY[1], SURFACE_TOTAL_PRESSURE[1]"
-        }
+            "HISTORY_OUTPUT": "TURBO_PERF",
 
-    def visualize(self, title: str = "Passage"):
-        fig = go.Figure(
-            layout=go.Layout(title=go.layout.Title(text=title))
-        )
-        coords = self.get_coords()
-        fig.add_trace(go.Scatter(
-            x=coords[:, 0],
-            y=coords[:, 1],
-            fill="toself",
-            legendgroup="passage",
-            name=f"Passage"
-        ))
-
-        for i, airfoil_coord in enumerate(self.airfoils_coords):
-            fig.add_trace(go.Scatter(
-                x=airfoil_coord[:, 0],
-                y=airfoil_coord[:, 1],
-                fill="toself",
-                legendgroup="airfoil",
-                legendgrouptitle_text="Airfoils",
-                name=f"Airfoil {i+1}"
-
-            ))
-        fig.layout.yaxis.scaleanchor = "x"  # type: ignore
-        fig.show()
-
-    def to_dict(self) -> Dict[str, Any]:
-        return asdict(self)
-
-
-@dataclass
-class TurboStagePassage(Passage):
-    inflow_passage: TurboRowPassage = field(metadata=opt_class())
-    "Passage with inflow boundary condition"
-
-    outflow_passage: TurboRowPassage = field(metadata=opt_class())
-    "Passage with outflow boundary condition"
-
-    def __post_init__(self):
-        self.outflow_passage.offset = [self.inflow_passage.width, 0]
-
-    def get_config(
-        self,
-        config_params: ConfigParameters,
-        working_directory: str,
-        id: str,
-    ) -> Dict[str, Any]:
-        assert config_params.target_outlet_static_state is not None, "Target outlet static state must be specified for turbo stage passage"
-        inflow_config = self.inflow_passage.get_config(config_params, working_directory, id)
-        inflow_mesh_params = self.inflow_passage.mesh_params
-        outflow_mesh_params = self.outflow_passage.mesh_params
-        return {
-            **inflow_config,
             "MULTIZONE": "YES",
             "CONFIG_LIST": {
                 f"{working_directory}/zone_1.cfg": {
@@ -318,7 +319,7 @@ class TurboStagePassage(Passage):
             "MARKER_GILES": f"({inflow_mesh_params.inlet_label}, TOTAL_CONDITIONS_PT, {config_params.inlet_total_state.P}, {config_params.inlet_total_state.T}, 1.0, 0.0, 0.0,1.0,1.0, {inflow_mesh_params.outlet_label}, MIXING_OUT, 0.0, 0.0, 0.0, 0.0, 0.0,1.0,1.0, {outflow_mesh_params.inlet_label}, MIXING_IN, 0.0, 0.0, 0.0, 0.0, 0.0,1.0, 1.0 {outflow_mesh_params.outlet_label}, STATIC_PRESSURE, {config_params.target_outlet_static_state.P}, 0.0, 0.0, 0.0, 0.0,1.0,1.0)",
             "SPATIAL_FOURIER": "NO",
             "TURBOMACHINERY_KIND": "AXIAL AXIAL",
-            "TURBO_PERF_KIND": "TURBINE TURBINE",
+            "TURBO_PERF_KIND": f"{turb_kind} {turb_kind}",
 
             "TURBULENT_MIXINGPLANE": "YES",
             "RAMP_OUTLET_PRESSURE": "NO",
@@ -326,12 +327,3 @@ class TurboStagePassage(Passage):
             "MARKER_PLOTTING": f"({inflow_mesh_params.airfoil_label}, {outflow_mesh_params.airfoil_label})",
         }
 
-    @cached_property
-    def surfaces(self):
-        return [*self.inflow_passage.surfaces, *self.outflow_passage.surfaces]
-
-    def get_mesh(self):
-        return [self.inflow_passage.get_mesh(), self.outflow_passage.get_mesh()]
-
-    def to_dict(self) -> Dict[str, Any]:
-        return asdict(self)

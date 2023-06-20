@@ -1,11 +1,7 @@
-from dataclasses import dataclass
 import dataclasses
 import multiprocessing
 import pickle
-from types import MappingProxyType
-from typing import Any, Callable, Dict, List, Literal, Optional, Sequence, Tuple, cast
-import numpy as np
-from paraflow import FlowState
+from typing import List, Literal, Optional, Sequence, Tuple, cast
 from pymoo.core.problem import ElementwiseProblem
 from pymoo.algorithms.moo.nsga2 import NSGA2
 from pymoo.operators.crossover.sbx import SBX
@@ -13,10 +9,8 @@ from pymoo.operators.mutation.pm import PM
 from pymoo.operators.sampling.rnd import FloatRandomSampling
 from pymoo.optimize import minimize
 from pymoo.core.problem import StarmapParallelization
-from paraflow.simulation.postprocessing import get_point_data
 from paraflow.simulation.simulation import run_simulation
-from paraflow.passages import SymmetricPassage, ConfigParameters
-from vtkmodules.util.numpy_support import numpy_to_vtk, vtk_to_numpy
+from paraflow.passages import ConfigParameters, Passage
 from dacite.core import from_dict
 
 from parafoil.passages.turbo import TurboStagePassage
@@ -30,12 +24,12 @@ runner = StarmapParallelization(pool.starmap)
 OBJECTIVE_TYPES = Literal["efficiency"]
 
 
-class TurboPassageOptimizer(ElementwiseProblem):
+class BaseOptimizer(ElementwiseProblem):
 
     def __init__(
         self,
         working_directory: str,
-        passage: TurboStagePassage,
+        passage: Passage,
         config_params: ConfigParameters,
         objectives: List[Tuple[OBJECTIVE_TYPES, MaxOrMin]],
     ):
@@ -43,14 +37,8 @@ class TurboPassageOptimizer(ElementwiseProblem):
         self.passage = passage
         self.config_params = config_params
         self.objectives = objectives
-
-            # label = metadata.get("label")
-            # if label:
-            #     print(f"{field_name}: {label}")
-
-        # bounds = np.concatenate(list(self.variable_config.values()), axis=0)
-
-        mins, maxs = get_opt_init(passage, TurboStagePassage)
+        self.passage_type = type(passage)
+        mins, maxs = get_opt_init(passage, self.passage_type)
         self.id = 0
 
         super().__init__(
@@ -62,10 +50,10 @@ class TurboPassageOptimizer(ElementwiseProblem):
             # elementwise_runner=runner
         )
 
-    def _evaluate(self, x, out, *args, **kwargs):
-        passage = cast(TurboStagePassage, create_opt_class_dict(self.passage, TurboStagePassage, x))
+    def get_passage_candidate(self, x):
+        passage = cast(self.passage_type, create_opt_class_dict(self.passage, self.passage_type, x))
         self.id += 1
-        sim_result = run_simulation(
+        return run_simulation(
             passage,
             config_params=self.config_params,
             working_directory="/workspaces/parafoil/simulation_out", 
@@ -73,35 +61,44 @@ class TurboPassageOptimizer(ElementwiseProblem):
             auto_delete=True
         )
 
-
+    def _evaluate(self, x, out, *args, **kwargs):
         out["F"] = []
         out["G"] = []
 
-    def optimize(self):
-        algorithm = NSGA2(
-            pop_size=40,
-            n_offsprings=10,
-            sampling=FloatRandomSampling(),
-            crossover=SBX(prob=0.9, eta=15),
-            mutation=PM(eta=20),
-            eliminate_duplicates=True
-        )
 
-        res = minimize(
-            self,
-            algorithm,
-            ("n_gen", 10000),
-            seed=1,
-            save_history=True,
-            verbose=True
-        )
 
-        # X, F = res.opt.get("X", "F")
+class TurboStageOptimizer(BaseOptimizer):
+    def _evaluate(self, x, out, *args, **kwargs):
+        candidate = self.get_passage_candidate(x)
+        out["F"] = []
+        out["G"] = []
 
-        with open(f'{self.working_directory}/optimization.pkl', 'wb') as optimization_result_file:
+
+def optimize(problem: ElementwiseProblem, output_file: Optional[str] = None):
+    algorithm = NSGA2(
+        pop_size=40,
+        n_offsprings=10,
+        sampling=FloatRandomSampling(),
+        crossover=SBX(prob=0.9, eta=15),
+        mutation=PM(eta=20),
+        eliminate_duplicates=True
+    )
+
+    res = minimize(
+        problem,
+        algorithm,
+        ("n_gen", 10000),
+        seed=1,
+        save_history=True,
+        verbose=True
+    )
+
+    # X, F = res.opt.get("X", "F")
+    if output_file:
+        with open(output_file, 'wb') as optimization_result_file:
             pickle.dump(res, optimization_result_file, pickle.HIGHEST_PROTOCOL)
 
-
+    return res
 
 def get_opt_init(
     instance,
@@ -159,10 +156,3 @@ def create_opt_class_dict(
     if current_index == 0:
         return from_dict(cls, class_dict)
     return class_dict
-
-
-#     if isinstance(instance_value, Sequence):
-#         return mins[current_index:len(instance_value)]
-#     else:
-#         return mins[current_index]
-
