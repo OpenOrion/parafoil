@@ -146,12 +146,8 @@ class CamberThicknessAirfoil(Airfoil):
 
     def get_coords(self):
         "airfoil coordinates"
-        top_bspline = get_bspline(self.top_ctrl_pnts, self.degree)
-        top_coords = top_bspline(self.sampling)
-
-        bottom_bspline = get_bspline(self.bottom_ctrl_pnts, self.degree)
-        bottom_coords = bottom_bspline(self.sampling)
-
+        top_coords = get_bspline(self.top_ctrl_pnts, self.degree)(self.sampling)
+        bottom_coords = get_bspline(self.bottom_ctrl_pnts, self.degree)(self.sampling)
         return np.concatenate([top_coords[1:-1], bottom_coords[::-1]])
 
     def visualize(

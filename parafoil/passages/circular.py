@@ -68,17 +68,6 @@ class CircularPassage(Passage):
             )
         ]
 
-    def get_mesh(
-        self,
-        output_path: Optional[str] = None
-    ):
-        with Geometry() as geometry:
-            if output_path is not None:
-                geometry.write(output_path)
-
-            mesh = geometry.generate(self.surfaces[0])
-            return mesh
-
     def visualize(self, title: str = "Passage"):
         fig = go.Figure(
             layout=go.Layout(title=go.layout.Title(text=title))

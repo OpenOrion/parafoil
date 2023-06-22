@@ -61,7 +61,7 @@ class TurboRowPassage(Passage):
         self.width = self.airfoil.axial_chord_length + self.leading_edge_gap + self.trailing_edge_gap
         self.spacing = self.airfoil.chord_length * self.spacing_to_chord
         self.height = self.spacing * self.num_airfoils
-        
+
     @cached_property
     def total_spacing(self):
         return self.spacing * self.num_airfoils
@@ -73,19 +73,17 @@ class TurboRowPassage(Passage):
         if type == "camber":
             ctrl_coords = self.airfoil.camber_coords
         elif type == "top":
-            ctrl_coords = self.airfoil.top_ctrl_pnts
+            ctrl_coords = self.airfoil.top_ctrl_pnts[1:-1]
         elif type == "bottom":
-            ctrl_coords = self.airfoil.bottom_ctrl_pnts
+            ctrl_coords = self.airfoil.bottom_ctrl_pnts[1:-1]
 
         return np.array([
             [0, 0],
-            [self.leading_edge_gap, 0],
             *(ctrl_coords + np.array([self.leading_edge_gap, 0])),
-            ctrl_coords[-1] + np.array([self.leading_edge_gap + self.trailing_edge_gap, 0]),
+            np.array([self.leading_edge_gap + self.trailing_edge_gap + self.airfoil.axial_chord_length, ctrl_coords[-1][1]]),
         ])
 
-    @cached_property
-    def airfoils_coords(self):
+    def get_airfoils_coords(self):
         airfoil_coords = self.airfoil.get_coords()
         airfoil_leading_pnt = airfoil_coords[np.argmin(airfoil_coords[:, 0])]
 
@@ -110,13 +108,13 @@ class TurboRowPassage(Passage):
         if self.mesh_params.passage_mesh_size is None:
             self.mesh_params.passage_mesh_size = 0.05 * self.airfoil.chord_length
 
-        airfoils_coords = self.airfoils_coords
+        airfoils_coords = self.get_airfoils_coords()
         if isinstance(self.mesh_params.airfoil_label, List):
             assert len(self.mesh_params.airfoil_label) == len(airfoils_coords)
 
         airfoil_curve_loops = [
             CurveLoop.from_coords(
-                airfoil_coords,
+                airfoil_coords[:-1],
                 mesh_size=self.mesh_params.airfoil_mesh_size,
                 curve_labels=self.mesh_params.airfoil_label[i] if isinstance(self.mesh_params.airfoil_label, List) else self.mesh_params.airfoil_label,
                 fields=[
@@ -133,31 +131,18 @@ class TurboRowPassage(Passage):
 
         top_offset = np.array([0, self.total_spacing/2]) + self.offset
         bottom_offset = np.array([0, -self.total_spacing/2]) + self.offset
-
         if self.type == "camber":
             top_ctrl_pnts = bottom_ctrl_pnts = self.get_ctrl_pnts("camber")
         else: 
             top_ctrl_pnts = self.get_ctrl_pnts("top")
             bottom_ctrl_pnts = self.get_ctrl_pnts("bottom")
 
-
-        # # plot points
-        # import matplotlib.pyplot as plt
-        # fig, ax = plt.subplots()
-        # new_top = top_ctrl_pnts + top_offset
-        # new_bottom = bottom_ctrl_pnts[::-1] + bottom_offset
-        # ax.plot(new_top[:, 0], new_top[:, 1], "r")
-        # ax.plot(new_bottom[:, 0], new_bottom[:, 1], "b")
-
-
-
-        coordsOrGroups = [
-            ("BSpline", top_ctrl_pnts + top_offset),
-            ("BSpline", bottom_ctrl_pnts[::-1] + bottom_offset)
-        ]
         curve_labels=[self.mesh_params.top_label, self.mesh_params.outlet_label, self.mesh_params.bottom_label, self.mesh_params.inlet_label]
         passage_curve_loop = CurveLoop.from_coords(
-            coordsOrGroups,
+            [
+                ("BSpline", top_ctrl_pnts + top_offset),
+                ("BSpline", bottom_ctrl_pnts[::-1] + bottom_offset)
+            ],
             mesh_size=self.mesh_params.passage_mesh_size,
             curve_labels=curve_labels,
             holes=airfoil_curve_loops
@@ -179,10 +164,11 @@ class TurboRowPassage(Passage):
             name=f"Passage"
         ))
 
-        for i, airfoil_coord in enumerate(self.airfoils_coords):
+        for i in range(self.num_airfoils):
+            airfoil_coords = self.surfaces[0].outlines[0].holes[i].get_exterior_coords(self.airfoil.num_samples)
             fig.add_trace(go.Scatter(
-                x=airfoil_coord[:, 0],
-                y=airfoil_coord[:, 1],
+                x=airfoil_coords[:, 0],
+                y=airfoil_coords[:, 1],
                 fill="toself",
                 legendgroup="airfoil",
                 legendgrouptitle_text="Airfoils",
