@@ -206,10 +206,11 @@ class TurboStagePassage(Passage):
         working_directory: str,
         id: str,
     ) -> Dict[str, Any]:
+        assert config_params.translation is not None, "Translation must be specified for turbo stage passage"
         assert config_params.target_outlet_static_state is not None, "Target outlet static state must be specified for turbo stage passage"
         inflow_mesh_params = self.inflow_passage.mesh_params
         outflow_mesh_params = self.outflow_passage.mesh_params
-        turb_kind = "TURBINE" if config_params.inlet_total_state.linear_velocity is None else "COMPRESSOR"
+        turb_kind = "TURBINE" if config_params.translation[0] is None else "COMPRESSOR"
         return {
             "SOLVER": "RANS",
             "KIND_TURB_MODEL": "SST",
@@ -281,19 +282,19 @@ class TurboStagePassage(Passage):
 
             "MULTIZONE": "YES",
             "CONFIG_LIST": {
-                f"{working_directory}/zone_1.cfg": {
+                f"{working_directory}/zone_{id}_1.cfg": {
                     **({
                         "GRID_MOVEMENT": "STEADY_TRANSLATION",
                         "MACH_MOTION": 0.35,
-                        "TRANSLATION_RATE": f"0.0 {config_params.inlet_total_state.linear_velocity} 0.0",
-                    } if config_params.inlet_total_state.linear_velocity else {"GRID_MOVEMENT": "NONE"})
+                        "TRANSLATION_RATE": f"{config_params.translation[0][0]} {config_params.translation[0][1]} {config_params.translation[0][2]}",
+                    } if config_params.translation[0] is not None else {"GRID_MOVEMENT": "NONE"})
                 },
-                f"{working_directory}/zone_2.cfg": {
+                f"{working_directory}/zone_{id}_2.cfg": {
                     **({
                         "GRID_MOVEMENT": "STEADY_TRANSLATION",
                         "MACH_MOTION": 0.35,
-                        "TRANSLATION_RATE": f"0.0 {config_params.target_outlet_static_state.linear_velocity} 0.0",
-                    } if config_params.target_outlet_static_state.linear_velocity else {"GRID_MOVEMENT": "NONE"})
+                        "TRANSLATION_RATE": f"{config_params.translation[1][0]} {config_params.translation[1][1]} {config_params.translation[1][2]}",
+                    } if config_params.translation[1] is not None else {"GRID_MOVEMENT": "NONE"})
                 }
             },
             "MARKER_HEATFLUX": f"( {inflow_mesh_params.airfoil_label}, 0.0, {outflow_mesh_params.airfoil_label}, 0.0)",

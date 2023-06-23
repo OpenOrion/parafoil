@@ -80,7 +80,7 @@ class CamberThicknessAirfoil(Airfoil):
         self.camber_bspline = get_bspline(self.camber_ctrl_pnts, self.degree)
         self.sampling = get_sampling(self.num_samples, self.is_cosine_sampling)
         self.axial_chord_length = self.chord_length*np.cos(self.stagger_angle)
-        self.chord_height = self.chord_length*np.sin(self.stagger_angle)
+        self.height = self.chord_length*np.sin(self.stagger_angle)
 
     @cached_property
     def camber_ctrl_pnts(self):

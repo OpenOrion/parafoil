@@ -12,8 +12,8 @@ class CoordAirfoil(Airfoil):
         coords_x = coords_array[:, 0]
         coords_y = coords_array[:, 1]
         self.axial_chord_length = cast(float, np.max(coords_x) - np.min(coords_x))
-        self.chord_height = cast(float, np.max(coords_y) - np.min(coords_y))
-        self.chord_length = np.sqrt(self.axial_chord_length**2 + self.chord_height**2)
+        self.height = cast(float, np.max(coords_y) - np.min(coords_y))
+        self.chord_length = np.sqrt(self.axial_chord_length**2 + self.height**2)
 
     def get_coords(self):
         return np.array(self.coords)
