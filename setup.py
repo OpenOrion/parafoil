@@ -14,6 +14,6 @@ setup(
     "scipy",
     "dacite",
     "ezmesh @ git+https://github.com/OpenOrion/ezmesh.git",
-    "paraflow @ git+https://github.com/OpenOrion/paraflow.git@2.0.0"
+    "paraflow @ git+https://github.com/OpenOrion/paraflow.git"
    ]
 )
