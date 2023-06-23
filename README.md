@@ -37,33 +37,33 @@ pip install git+https://github.com/Turbodesigner/parafoil.git@1.0.0#egg=parafoil
 ## Airfoil
 ```python
 import numpy as np
-from parafoil import Airfoil, PassageBuilder
+from parafoil import CamberThicknessAirfoil
 
-airfoil = Airfoil(
+airfoil = CamberThicknessAirfoil(
     inlet_angle=np.radians(40.0),
-    outlet_angle=np.radians(20.0),
+    outlet_angle=np.radians(-20.0),
     stagger_angle=np.radians(0.0),
-    upper_thick_dist=[0.05, 0.2, 0.2, 0.05, 0.01],
-    lower_thick_dist=[0.05, 0.2, 0.2, 0.05, 0.01],
+    upper_thick_prop=[0.035, 0.14, 0.14, 0.035, 0.007],
+    lower_thick_prop=[0.035, 0.14, 0.14, 0.035, 0.007],
     leading_prop=0.5,
     trailing_prop=0.5,
-    chord_length=1.44
+    chord_length=1
 )
-python(airfoil.coords)
+
 airfoil.visualize(include_camber_ctrl_pnts=True)
 ```
 ![Airfoil](./assets/airfoil.png)
 
 ## Passage
 ```python
-passage = PassageBuilder.airfoil_row_passage(
-    airfoil=airfoil,
-    spacing=1.0 * airfoil.chord_length,
-    leading_edge_gap=0.25,
-    trailing_edge_gap=0.25,
-    num_blades=1
-)
+from parafoil import TurboRowPassage 
 
+passage = TurboRowPassage(
+    airfoil=airfoil,
+    spacing_to_chord=1.0,
+    leading_edge_gap_to_chord=0.25,
+    trailing_edge_gap_to_chord=0.25,
+)
 passage.visualize()
 ```
 

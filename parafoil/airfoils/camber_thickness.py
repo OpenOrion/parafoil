@@ -1,11 +1,13 @@
 from dataclasses import dataclass, field
 from functools import cached_property
-from typing import List
+from typing import List, Optional
 import numpy as np
 import plotly.graph_objects as go
 import numpy.typing as npt
+from parafoil.metadata import opt_range, opt_constant
 from parafoil.utils import get_bspline, get_sampling
 from .airfoil import Airfoil
+
 
 def get_thickness_dist_ctrl_pnts(
     camber: npt.NDArray,
@@ -24,32 +26,32 @@ def get_thickness_dist_ctrl_pnts(
 
 
 @dataclass
-class BSplineAirfoil(Airfoil):
+class CamberThicknessAirfoil(Airfoil):
     "parametric airfoil using B-splines"
 
-    inlet_angle: float
+    inlet_angle: float = field(metadata=opt_range(-np.pi/2, np.pi/2))
     "inlet angle (rad)"
 
-    outlet_angle: float
+    outlet_angle: float = field(metadata=opt_range(-np.pi/2, np.pi/2))
     "outlet angle (rad)"
 
-    stagger_angle: float
-    "stagger angle (rad)"
+    upper_thick_prop: List[float] = field(metadata=opt_range(0, 1))
+    "upper thickness proportion to chord length (length)"
 
-    upper_thick_dist: List[float]
-    "upper thickness distribution (length)"
+    lower_thick_prop: List[float] = field(metadata=opt_range(0, 1))
+    "lower thickness proportion to chord length (length)"
 
-    lower_thick_dist: List[float]
-    "lower thickness distribution (length)"
-
-    leading_prop: float
+    leading_prop: float = field(metadata=opt_range(0.0, 1.0))
     "leading edge tangent line proportion [0.0-1.0] (dimensionless)"
 
-    trailing_prop: float
+    trailing_prop: float = field(metadata=opt_range(0.0, 1.0))
     "trailing edge tangent line proportion [0.0-1.0] (dimensionless)"
 
-    chord_length: float = 1.0
+    chord_length: float = field(default=1.0, metadata=opt_constant())
     "chord length (length)"
+
+    stagger_angle: Optional[float] = field(default=None, metadata=opt_range(-np.pi/2, np.pi/2))
+    "stagger angle (rad)"
 
     num_samples: int = 50
     "number of samples"
@@ -61,15 +63,28 @@ class BSplineAirfoil(Airfoil):
     "leading control point (length)"
 
     def __post_init__(self):
+        if self.upper_thick_prop is not None:
+            self.upper_thick_dist = [self.chord_length*prop for prop in self.upper_thick_prop]
+
+        if self.lower_thick_prop is not None:
+            self.lower_thick_dist = [self.chord_length*prop for prop in self.lower_thick_prop]
+
+        assert self.upper_thick_dist is not None and self.lower_thick_dist is not None
+
+        if self.stagger_angle is None:
+            self.stagger_angle = (self.inlet_angle + self.outlet_angle)/2
+
         self.degree = 3
         self.num_thickness_dist_pnts = len(self.upper_thick_dist) + 4
-        self.thickness_dist_sampling = np.linspace(0, 1, self.num_thickness_dist_pnts, endpoint=True)    
+        self.thickness_dist_sampling = np.linspace(0, 1, self.num_thickness_dist_pnts, endpoint=True)
         self.camber_bspline = get_bspline(self.camber_ctrl_pnts, self.degree)
         self.sampling = get_sampling(self.num_samples, self.is_cosine_sampling)
-        self.axial_chord_length =  self.chord_length*np.cos(self.stagger_angle)
+        self.axial_chord_length = self.chord_length*np.cos(self.stagger_angle)
+        self.height = self.chord_length*np.sin(self.stagger_angle)
 
     @cached_property
     def camber_ctrl_pnts(self):
+        assert self.stagger_angle is not None, "stagger angle is not defined"
         p_le = np.array(self.leading_ctrl_pnt)
 
         p_te = p_le + np.array([
@@ -92,32 +107,30 @@ class BSplineAirfoil(Airfoil):
         return np.vstack((p_le, p1, p2, p_te))
 
     @cached_property
-    def top_coords(self):
+    def top_ctrl_pnts(self):
         "upper side bspline"
+        assert self.upper_thick_dist is not None, "upper thickness distribution is not defined"
         thickness_dist = np.vstack(self.upper_thick_dist)
-        ctrl_pnts = get_thickness_dist_ctrl_pnts(
+        return get_thickness_dist_ctrl_pnts(
             self.camber_coords,
             self.camber_normal_coords,
             thickness_dist,
             self.thickness_dist_sampling,
             self.degree
         )
-        bspline =  get_bspline(ctrl_pnts, self.degree)
-        return bspline(self.sampling)
-    
+
     @cached_property
-    def bottom_coords(self):
+    def bottom_ctrl_pnts(self):
         "lower side bspline"
+        assert self.lower_thick_dist is not None, "lower thickness distribution is not defined"
         thickness_dist = -np.vstack(self.lower_thick_dist)
-        ctrl_pnts = get_thickness_dist_ctrl_pnts(
+        return get_thickness_dist_ctrl_pnts(
             self.camber_coords,
             self.camber_normal_coords,
             thickness_dist,
             self.thickness_dist_sampling,
             self.degree
         )
-        bspline = get_bspline(ctrl_pnts, self.degree)
-        return bspline(self.sampling)
 
     @cached_property
     def camber_coords(self) -> npt.NDArray:
@@ -133,12 +146,15 @@ class BSplineAirfoil(Airfoil):
 
     def get_coords(self):
         "airfoil coordinates"
-        return np.concatenate([self.top_coords[1:-1], np.flip(self.bottom_coords, axis=0)])
+        top_coords = get_bspline(self.top_ctrl_pnts, self.degree)(self.sampling)
+        bottom_coords = get_bspline(self.bottom_ctrl_pnts, self.degree)(self.sampling)
+        return np.concatenate([top_coords[1:-1], bottom_coords[::-1]])
 
     def visualize(
         self,
         include_camber=True,
         include_camber_ctrl_pnts=False,
+        filename: Optional[str] = None
     ):
         fig = go.Figure(
             layout=go.Layout(title=go.layout.Title(text="Airfoil"))
@@ -166,4 +182,7 @@ class BSplineAirfoil(Airfoil):
         ))
 
         fig.layout.yaxis.scaleanchor = "x"  # type: ignore
-        fig.show()
+        if filename:
+            fig.write_image(filename, width=500, height=500)
+        else:
+            fig.show()

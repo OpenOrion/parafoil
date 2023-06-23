@@ -1,3 +1,3 @@
 from .airfoil import Airfoil
-from .bspline import BSplineAirfoil
+from .camber_thickness import CamberThicknessAirfoil
 from .coord import CoordAirfoil
