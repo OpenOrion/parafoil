@@ -5,7 +5,7 @@ import numpy as np
 import numpy.typing as npt
 from plotly import graph_objects as go
 from parafoil.airfoils import CamberThicknessAirfoil
-from parafoil.metadata import opt_class, opt_range
+from parafoil.metadata import opt_class, opt_constant, opt_range
 from ezmesh import CurveLoop, PlaneSurface, BoundaryLayerField, Geometry
 from paraflow import Passage, ConfigParameters, FlowState
 
@@ -28,13 +28,13 @@ class TurboRowPassage(Passage):
     airfoil: CamberThicknessAirfoil = field(metadata=opt_class())
     "airfoil for the passage"
 
-    spacing_to_chord: float = field(metadata=opt_range(0.5, 1.2))
+    spacing_to_chord: float = field(metadata=opt_constant())
     "spacing between blades"
 
-    leading_edge_gap_to_chord: float = field(metadata=opt_range(0.5, 1.2))
+    leading_edge_gap_to_chord: float = field(metadata=opt_constant())
     "gap between the leading edge of the airfoil and the passage"
 
-    trailing_edge_gap_to_chord: float = field(metadata=opt_range(0.5, 1.2))
+    trailing_edge_gap_to_chord: float = field(metadata=opt_constant())
     "gap between the trailing edge of the airfoil and the passage"
 
     num_airfoils: int = 1
@@ -104,7 +104,7 @@ class TurboRowPassage(Passage):
         if self.mesh_params.boundary_layer_thickness is None:
             self.mesh_params.boundary_layer_thickness = 0.01 * self.airfoil.chord_length
         if self.mesh_params.boundary_wall_mesh_size is None:
-            self.mesh_params.boundary_wall_mesh_size = 0.001 * self.airfoil.chord_length
+            self.mesh_params.boundary_wall_mesh_size = 0.01 * self.airfoil.chord_length
         if self.mesh_params.passage_mesh_size is None:
             self.mesh_params.passage_mesh_size = 0.05 * self.airfoil.chord_length
 
@@ -119,8 +119,10 @@ class TurboRowPassage(Passage):
                 curve_labels=self.mesh_params.airfoil_label[i] if isinstance(self.mesh_params.airfoil_label, List) else self.mesh_params.airfoil_label,
                 fields=[
                     BoundaryLayerField(
-                        hwall_n=self.mesh_params.boundary_wall_mesh_size,
+                        hwall_n=0.0000017953254358614717,
+                        hfar=0.001,
                         thickness=self.mesh_params.boundary_layer_thickness,
+                        ratio=1.1,
                         is_quad_mesh=True,
                         intersect_metrics=False
                     )
@@ -197,6 +199,10 @@ class TurboStagePassage(Passage):
     def surfaces(self):
         return [*self.inflow_passage.surfaces, *self.outflow_passage.surfaces]
 
+    def visualize(self, title: str = "Passage"):
+        self.inflow_passage.visualize(title)
+        self.outflow_passage.visualize(title)
+
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
 
@@ -206,6 +212,10 @@ class TurboStagePassage(Passage):
         working_directory: str,
         id: str,
     ) -> Dict[str, Any]:
+        # config_params.inlet_total_state.nu
+
+        # 
+
         assert config_params.translation is not None, "Translation must be specified for turbo stage passage"
         assert config_params.target_outlet_static_state is not None, "Target outlet static state must be specified for turbo stage passage"
         inflow_mesh_params = self.inflow_passage.mesh_params
@@ -226,8 +236,8 @@ class TurboStagePassage(Passage):
             "FREESTREAM_TEMPERATURE": config_params.inlet_total_state.T,
             "FREESTREAM_DENSITY": config_params.inlet_total_state.rho_mass(),
             
-            "FREESTREAM_TURBULENCEINTENSITY": 0.03,
-            "FREESTREAM_TURB2LAMVISCRATIO": 100.0,
+            "FREESTREAM_TURBULENCEINTENSITY": 0.05, # standard for turbomachinery
+            "FREESTREAM_TURB2LAMVISCRATIO": 100.0, # standard for turbomachinery
             "REF_ORIGIN_MOMENT_X": 0.00,
             "REF_ORIGIN_MOMENT_Y": 0.00,
             "REF_ORIGIN_MOMENT_Z": 0.00,
@@ -252,21 +262,22 @@ class TurboStagePassage(Passage):
             "CFL_ADAPT_PARAM": "( 1.3, 1.2, 1.0, 10.0)",
             "LINEAR_SOLVER": "FGMRES",
             "LINEAR_SOLVER_PREC": "LU_SGS",
-            "LINEAR_SOLVER_ERROR": 1E-6,
+            "LINEAR_SOLVER_ERROR": 1E-4, # good estimate # "LINEAR_SOLVER_ERROR": 1E-6,
+
             "LINEAR_SOLVER_ITER": 10,
             "VENKAT_LIMITER_COEFF": 0.05,
             "LIMITER_ITER": 999999,
             "CONV_NUM_METHOD_FLOW": "ROE",
             "MUSCL_FLOW": "YES",
             "SLOPE_LIMITER_FLOW": "VAN_ALBADA_EDGE",
-            "ENTROPY_FIX_COEFF": 0.1,
+            "ENTROPY_FIX_COEFF": 0.1, # higher this the less accurate, 0.1 already pretty high, usually do 0.05
             "JST_SENSOR_COEFF": (0.5, 0.02),
             "TIME_DISCRE_FLOW": "EULER_IMPLICIT",
             "CONV_NUM_METHOD_TURB": "SCALAR_UPWIND",
             "TIME_DISCRE_TURB": "EULER_IMPLICIT",
             "CFL_REDUCTION_TURB": 1.0,
-            "OUTER_ITER": 21,
-            "CONV_RESIDUAL_MINVAL": -16,
+            "OUTER_ITER": 2000,
+            "CONV_RESIDUAL_MINVAL": -10,
             "CONV_STARTITER": 10,
             "CONV_CAUCHY_ELEMS": 100,
             "CONV_CAUCHY_EPS": 1E-6,
@@ -303,14 +314,18 @@ class TurboStagePassage(Passage):
             "MARKER_ANALYZE": "(outflow)",
 
             "MARKER_MIXINGPLANE_INTERFACE": f"({inflow_mesh_params.outlet_label}, {outflow_mesh_params.inlet_label})",
+            "MARKER_ZONE_INTERFACE": f"({inflow_mesh_params.outlet_label}, {outflow_mesh_params.inlet_label})",
+
             "MARKER_GILES": f"({inflow_mesh_params.inlet_label}, TOTAL_CONDITIONS_PT, {config_params.inlet_total_state.P}, {config_params.inlet_total_state.T}, 1.0, 0.0, 0.0,1.0,1.0, {inflow_mesh_params.outlet_label}, MIXING_OUT, 0.0, 0.0, 0.0, 0.0, 0.0,1.0,1.0, {outflow_mesh_params.inlet_label}, MIXING_IN, 0.0, 0.0, 0.0, 0.0, 0.0,1.0, 1.0 {outflow_mesh_params.outlet_label}, STATIC_PRESSURE, {config_params.target_outlet_static_state.P}, 0.0, 0.0, 0.0, 0.0,1.0,1.0)",
-            "SPATIAL_FOURIER": "NO",
+            "SPATIAL_FOURIER": "NO", # YES if issues with wave reflection
             "TURBOMACHINERY_KIND": "AXIAL AXIAL",
             "TURBO_PERF_KIND": f"{turb_kind} {turb_kind}",
 
             "TURBULENT_MIXINGPLANE": "YES",
-            "RAMP_OUTLET_PRESSURE": "NO",
+            "RAMP_OUTLET_PRESSURE": "NO", # YES can help with convergence
             "RAMP_OUTLET_PRESSURE_COEFF": "(140000.0, 10.0, 2000)",
             "MARKER_PLOTTING": f"({inflow_mesh_params.airfoil_label}, {outflow_mesh_params.airfoil_label})",
+            "OUTPUT_WRT_FREQ": 10,
+            "VOLUME_OUTPUT": "(SOLUTION, RESIDUAL, PRIMITIVE)"
         }
 

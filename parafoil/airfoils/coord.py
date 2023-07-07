@@ -3,6 +3,8 @@ from typing import List, cast
 import numpy as np
 from .airfoil import Airfoil
 
+
+
 @dataclass
 class CoordAirfoil(Airfoil):
     coords: List[List[float]]

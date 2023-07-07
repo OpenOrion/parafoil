@@ -35,22 +35,22 @@ class CamberThicknessAirfoil(Airfoil):
     outlet_angle: float = field(metadata=opt_range(-np.pi/2, np.pi/2))
     "outlet angle (rad)"
 
-    upper_thick_prop: List[float] = field(metadata=opt_range(0, 1))
+    upper_thick_prop: List[float] = field(metadata=opt_constant())
     "upper thickness proportion to chord length (length)"
 
-    lower_thick_prop: List[float] = field(metadata=opt_range(0, 1))
+    lower_thick_prop: List[float] = field(metadata=opt_constant())
     "lower thickness proportion to chord length (length)"
 
-    leading_prop: float = field(metadata=opt_range(0.0, 1.0))
+    leading_prop: float = field(metadata=opt_constant())
     "leading edge tangent line proportion [0.0-1.0] (dimensionless)"
 
-    trailing_prop: float = field(metadata=opt_range(0.0, 1.0))
+    trailing_prop: float = field(metadata=opt_constant())
     "trailing edge tangent line proportion [0.0-1.0] (dimensionless)"
 
     chord_length: float = field(default=1.0, metadata=opt_constant())
     "chord length (length)"
 
-    stagger_angle: Optional[float] = field(default=None, metadata=opt_range(-np.pi/2, np.pi/2))
+    stagger_angle: Optional[float] = None
     "stagger angle (rad)"
 
     num_samples: int = 50
@@ -81,6 +81,9 @@ class CamberThicknessAirfoil(Airfoil):
         self.sampling = get_sampling(self.num_samples, self.is_cosine_sampling)
         self.axial_chord_length = self.chord_length*np.cos(self.stagger_angle)
         self.height = self.chord_length*np.sin(self.stagger_angle)
+
+    def mutate(self, **kwargs):
+        return CamberThicknessAirfoil(**{**self.__dict__, **kwargs})
 
     @cached_property
     def camber_ctrl_pnts(self):
