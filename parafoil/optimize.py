@@ -9,7 +9,7 @@ from pymoo.operators.sampling.rnd import FloatRandomSampling
 from pymoo.optimize import minimize
 from pymoo.core.problem import StarmapParallelization
 from paraflow.simulation.simulation import run_simulation
-from paraflow.passages import ConfigParameters, Passage
+from paraflow.passages import SimulationOptions, Passage
 from dacite.core import from_dict
 from pymoo.core.population import Population
 from pymoo.core.evaluator import Evaluator
@@ -29,12 +29,12 @@ class BaseOptimizer(ElementwiseProblem):
         self,
         working_directory: str,
         passage: Passage,
-        config_params: ConfigParameters,
+        sim_options: SimulationOptions,
         objectives: List[Tuple[OBJECTIVE_TYPES, MaxOrMin]],
     ):
         self.working_directory = working_directory
         self.passage = passage
-        self.config_params = config_params
+        self.sim_options = sim_options
         self.objectives = objectives
         self.passage_type = type(passage)
         mins, maxs = get_mins_maxs(passage, self.passage_type)
@@ -54,7 +54,7 @@ class BaseOptimizer(ElementwiseProblem):
         self.id += 1
         return run_simulation(
             passage,
-            config_params=self.config_params,
+            sim_options=self.sim_options,
             working_directory=self.working_directory, 
             id=f"{self.id}",
             auto_delete=True,
