@@ -71,13 +71,22 @@ class TurboRowPassage(Passage):
     def get_coords(self) -> npt.NDArray[np.float64]:
         return self.surfaces[0].curve_loops[0].get_exterior_coords(self.num_samples, self.is_cosine_sampling)
 
-    def get_ctrl_pnts(self, type: Literal["top", "bottom", "camber"] = "top"):
+    def get_ctrl_pnts(self, type: Literal["top", "bottom", "camber"] = "top") -> npt.NDArray[np.float64]:
         if type == "camber":
             ctrl_coords = self.airfoil.camber_coords
         elif type == "top":
-            ctrl_coords = self.airfoil.top_ctrl_pnts[1:-1]
+            ctrl_coords = self.airfoil.top_ctrl_pnts
         elif type == "bottom":
-            ctrl_coords = self.airfoil.bottom_ctrl_pnts[1:-1]
+            ctrl_coords = self.airfoil.bottom_ctrl_pnts
+
+        if self.type != "line" and type in ["top", "bottom"]:
+            ctrl_coords = ctrl_coords[1:-1]
+
+        if self.type == "line":
+            ctrl_coords = np.array([
+                ctrl_coords[0],
+                ctrl_coords[-1]
+            ])
 
         return np.array([
             [0, 0],
@@ -121,10 +130,8 @@ class TurboRowPassage(Passage):
                 L=self.airfoil.chord_length,
                 y_plus_desired=1.0
             )
-            print(y_plus)
         else:
             y_plus = 0.001 * self.airfoil.chord_length
-        # y_plus = 0.0000017953
 
 
         airfoil_curve_loops = [
@@ -155,10 +162,12 @@ class TurboRowPassage(Passage):
             bottom_ctrl_pnts = self.get_ctrl_pnts("bottom")
 
         curve_labels=[self.mesh_params.top_label, self.mesh_params.outlet_label, self.mesh_params.bottom_label, self.mesh_params.inlet_label]
+        
+        curve_type = "LineSegment" if self.type == "line" else "BSpline"
         passage_curve_loop = CurveLoop.from_coords(
             [
-                ("BSpline", top_ctrl_pnts + top_offset),
-                ("BSpline", bottom_ctrl_pnts[::-1] + bottom_offset)
+                (curve_type, top_ctrl_pnts + top_offset),
+                (curve_type, bottom_ctrl_pnts[::-1] + bottom_offset)
             ],
             mesh_size=self.mesh_params.passage_mesh_size,
             curve_labels=curve_labels,
@@ -290,7 +299,7 @@ class TurboStagePassage(Passage):
             "CONV_NUM_METHOD_TURB": "SCALAR_UPWIND",
             "TIME_DISCRE_TURB": "EULER_IMPLICIT",
             "CFL_REDUCTION_TURB": 1.0,
-            "OUTER_ITER": 10000,
+            "OUTER_ITER": 200,
             "CONV_RESIDUAL_MINVAL": -10,
             "CONV_STARTITER": 10,
             "CONV_CAUCHY_ELEMS": 100,
@@ -302,7 +311,6 @@ class TurboStagePassage(Passage):
             "RESTART_FILENAME":  f"{working_directory}/restart_flow{id}.dat",
             "SURFACE_FILENAME":  f"{working_directory}/surface_flow{id}.vtu",
             "CONV_FILENAME": f"{working_directory}/config{id}.csv",
-            "OUTPUT_WRT_FREQ": 1000,
             "HISTORY_OUTPUT": "TURBO_PERF",
 
             "MULTIZONE": "YES",
@@ -339,7 +347,7 @@ class TurboStagePassage(Passage):
             "RAMP_OUTLET_PRESSURE": "NO", # YES can help with convergence
             "RAMP_OUTLET_PRESSURE_COEFF": "(140000.0, 10.0, 2000)",
             "MARKER_PLOTTING": f"({inflow_mesh_params.airfoil_label}, {outflow_mesh_params.airfoil_label})",
-            "OUTPUT_WRT_FREQ": 10,
+            # "OUTPUT_WRT_FREQ": 10,
             "VOLUME_OUTPUT": "(SOLUTION, RESIDUAL, PRIMITIVE)"
         }
 

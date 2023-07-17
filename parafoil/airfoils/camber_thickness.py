@@ -29,16 +29,16 @@ def get_thickness_dist_ctrl_pnts(
 class CamberThicknessAirfoil(Airfoil):
     "parametric airfoil using B-splines"
 
-    inlet_angle: float = field(metadata=opt_range(-np.pi/2, np.pi/2))
+    inlet_angle: float = field(metadata=opt_constant())
     "inlet angle (rad)"
 
-    outlet_angle: float = field(metadata=opt_range(-np.pi/2, np.pi/2))
+    outlet_angle: float = field(metadata=opt_constant())
     "outlet angle (rad)"
 
-    upper_thick_prop: List[float] = field(metadata=opt_constant())
+    upper_thick_prop: List[float] = field(metadata=opt_range(0.01, 0.05))
     "upper thickness proportion to chord length (length)"
 
-    lower_thick_prop: List[float] = field(metadata=opt_constant())
+    lower_thick_prop: List[float] = field(metadata=opt_range(0.01, 0.05))
     "lower thickness proportion to chord length (length)"
 
     leading_prop: float = field(metadata=opt_constant())

@@ -1,6 +1,8 @@
 import dataclasses
+import multiprocessing
 import pickle
 from typing import List, Literal, Optional, Sequence, Tuple, cast
+import numpy as np
 from pymoo.core.problem import ElementwiseProblem
 from pymoo.algorithms.moo.nsga2 import NSGA2
 from pymoo.operators.crossover.sbx import SBX
@@ -15,35 +17,28 @@ from pymoo.core.population import Population
 from pymoo.core.evaluator import Evaluator
 
 
-MaxOrMin = Literal["max", "min"]
-
-# n_proccess = 1
-# pool = multiprocessing.Pool(n_proccess)
-# runner = StarmapParallelization(pool.starmap)
-
-OBJECTIVE_TYPES = Literal["efficiency"]
-
-
 class BaseOptimizer(ElementwiseProblem):
     def __init__(
         self,
         working_directory: str,
         passage: Passage,
         sim_options: SimulationOptions,
-        objectives: List[Tuple[OBJECTIVE_TYPES, MaxOrMin]],
     ):
         self.working_directory = working_directory
         self.passage = passage
         self.sim_options = sim_options
-        self.objectives = objectives
         self.passage_type = type(passage)
         mins, maxs = get_mins_maxs(passage, self.passage_type)
         self.id = 0
 
+        # num_processes = multiprocessing.cpu_count()
+        # pool = multiprocessing.Pool(num_processes)
+        # runner = StarmapParallelization(pool.starmap)
+
         super().__init__(
             n_var=len(mins),
-            n_obj=len(self.objectives),
-            n_ieq_constr=0,
+            n_obj=1,
+            n_ieq_constr=1,
             xl=mins,
             xu=maxs,
             # elementwise_runner=runner
@@ -52,34 +47,42 @@ class BaseOptimizer(ElementwiseProblem):
     def get_passage_candidate(self, x):
         passage = cast(self.passage_type, get_class_from_arr(self.passage, self.passage_type, x))
         self.id += 1
+        passage.visualize()
         return run_simulation(
             passage,
             sim_options=self.sim_options,
             working_directory=self.working_directory, 
             id=f"{self.id}",
-            auto_delete=True,
-                simulator_config={
-                    "custom_download_url": "https://github.com/OpenOrion/SU2/releases/download/7.5.2/SU2-7.5.2-macos64.zip"
-                }
+            auto_delete=False,
+            num_procs=8,
+            sim_config={
+                "custom_executable_path": "/Users/afshawnlotfi/simulators/su2/SU2_CFD",
+                "custom_mpirun_path": "/opt/homebrew/bin/mpirun"
+                # "custom_download_url": "https://github.com/OpenOrion/SU2/releases/download/7.5.2/SU2-7.5.2-macos64.zip"
+            }
         )
 
     def _evaluate(self, x, out, *args, **kwargs):
         candidate = self.get_passage_candidate(x)
-        print(candidate)
-        out["F"] = []
-        out["G"] = []
+        
+        if "Exit Success (SU2_CFD)" in candidate.log_output:
+            efficiency = float(candidate.eval_values.loc[candidate.eval_values.index[-1], '  "TotTotEff[1]"  '])
+            # 0 is valid, 0 <= 0 is true
+            valid = 0
+        else:
+            efficiency = 1E10     
+            valid = 1     
+        out["F"] = [-efficiency]
+        out["G"] = [valid]
 
 
     def optimize(self, output_file: Optional[str] = None):
         initial_sampling = get_arr_from_class(self.passage, self.passage_type)
-        # X = np.random.random((300, problem.n_var))
-        pop = Population.new("X", initial_sampling)
-        Evaluator().eval(self, pop)
 
         algorithm = NSGA2(
             pop_size=40,
             n_offsprings=10,
-            sampling=pop,
+            sampling=np.array(initial_sampling),
             crossover=SBX(prob=0.9, eta=15),
             mutation=PM(eta=20),
             eliminate_duplicates=True
