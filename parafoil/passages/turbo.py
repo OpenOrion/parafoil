@@ -54,7 +54,7 @@ class TurboRowPassage(Passage):
     type: Literal["camber", "surface", "line"] = "camber"
     "type of the passage curve based on pressure or suction surface or camber"
 
-    mesh_params: TurboMeshParameters = field(default_factory=TurboMeshParameters)
+    mesh_params: TurboMeshParameters = field(default_factory=TurboMeshParameters, metadata=opt_constant())
     "mesh parameters for the passage"
 
     def __post_init__(self):
@@ -299,7 +299,7 @@ class TurboStagePassage(Passage):
             "CONV_NUM_METHOD_TURB": "SCALAR_UPWIND",
             "TIME_DISCRE_TURB": "EULER_IMPLICIT",
             "CFL_REDUCTION_TURB": 1.0,
-            "OUTER_ITER": 200,
+            "OUTER_ITER": 5000,
             "CONV_RESIDUAL_MINVAL": -10,
             "CONV_STARTITER": 10,
             "CONV_CAUCHY_ELEMS": 100,

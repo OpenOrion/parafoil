@@ -15,6 +15,9 @@ from paraflow.passages import SimulationOptions, Passage
 from dacite.core import from_dict
 from pymoo.core.population import Population
 from pymoo.core.evaluator import Evaluator
+from ezmesh import visualize_mesh
+
+from parafoil.passages.turbo import TurboStagePassage
 
 
 class BaseOptimizer(ElementwiseProblem):
@@ -27,7 +30,7 @@ class BaseOptimizer(ElementwiseProblem):
         self.working_directory = working_directory
         self.passage = passage
         self.sim_options = sim_options
-        self.passage_type = type(passage)
+        self.passage_type = TurboStagePassage
         mins, maxs = get_mins_maxs(passage, self.passage_type)
         self.id = 0
 
@@ -47,17 +50,18 @@ class BaseOptimizer(ElementwiseProblem):
     def get_passage_candidate(self, x):
         passage = cast(self.passage_type, get_class_from_arr(self.passage, self.passage_type, x))
         self.id += 1
-        passage.visualize()
+        meshes = passage.get_meshes()
+        visualize_mesh(meshes)
         return run_simulation(
             passage,
             sim_options=self.sim_options,
             working_directory=self.working_directory, 
             id=f"{self.id}",
             auto_delete=False,
-            num_procs=8,
+            # num_procs=8,
             sim_config={
-                "custom_executable_path": "/Users/afshawnlotfi/simulators/su2/SU2_CFD",
-                "custom_mpirun_path": "/opt/homebrew/bin/mpirun"
+                "custom_executable_path": "/Users/afshawnlotfi/simulators/su2/SU2-7.5.2-macos64",
+                # "custom_mpirun_path": "/opt/homebrew/bin/mpirun"
                 # "custom_download_url": "https://github.com/OpenOrion/SU2/releases/download/7.5.2/SU2-7.5.2-macos64.zip"
             }
         )
