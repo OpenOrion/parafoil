@@ -4,7 +4,7 @@ from typing import List, Optional
 import numpy as np
 import plotly.graph_objects as go
 import numpy.typing as npt
-from parafoil.metadata import opt_range, opt_constant
+from parafoil.metadata import opt_constant, opt_range, opt_tol_range
 from parafoil.utils import get_bspline, get_sampling
 from .airfoil import Airfoil
 
@@ -29,10 +29,10 @@ def get_thickness_dist_ctrl_pnts(
 class CamberThicknessAirfoil(Airfoil):
     "parametric airfoil using B-splines"
 
-    inlet_angle: float = field(metadata=opt_constant())
+    inlet_angle: float = field(metadata=opt_tol_range(np.radians(-10), np.radians(10)))
     "inlet angle (rad)"
 
-    outlet_angle: float = field(metadata=opt_constant())
+    outlet_angle: float = field(metadata=opt_tol_range(np.radians(-10), np.radians(10)))
     "outlet angle (rad)"
 
     upper_thick_prop: List[float] = field(metadata=opt_range(0.01, 0.05))

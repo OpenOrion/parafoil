@@ -1,5 +1,4 @@
 import dataclasses
-import multiprocessing
 import pickle
 from typing import List, Literal, Optional, Sequence, Tuple, cast
 import numpy as np
@@ -119,13 +118,22 @@ def get_mins_maxs(
     for field in fields:
         instance_value = getattr(instance, field.name)
         if field.metadata and "type" in field.metadata:
-            if field.metadata["type"] == "range":
-                if isinstance(instance_value, Sequence):
-                    mins += [field.metadata["min"]] * len(instance_value)
-                    maxs += [field.metadata["max"]] * len(instance_value)
+            if field.metadata["type"] in ["range", "tol_range"]:
+                if field.metadata["type"] == "tol_range":
+                    min = instance_value + field.metadata["min"]
+                    max = instance_value + field.metadata["max"]
                 else:
-                    mins.append(field.metadata["min"])
-                    maxs.append(field.metadata["max"])
+                    min = field.metadata["min"]
+                    max = field.metadata["max"]
+
+                if isinstance(instance_value, Sequence):
+                    mins += [min] * len(instance_value)
+                    maxs += [max] * len(instance_value)
+                else:
+                    mins.append(min)
+                    maxs.append(max)
+                
+
 
             if dataclasses.is_dataclass(field.type) and field.metadata["type"] == "class":
                 mins, maxs = get_mins_maxs(instance_value, field.type, mins, maxs)
@@ -141,7 +149,7 @@ def get_arr_from_class(
     for field in fields:
         instance_value = getattr(instance, field.name)
         if field.metadata and "type" in field.metadata:
-            if field.metadata["type"] == "range":
+            if field.metadata["type"] in ["range", "tol_range"]:
                 if isinstance(instance_value, Sequence):
                     instance_values += instance_value
                 else:
@@ -168,7 +176,7 @@ def get_class_from_arr(
         instance_value = getattr(instance, attribute_name)
         if attribute_metadata:
             if "type" in attribute_metadata:
-                if attribute_metadata["type"] == "range":
+                if attribute_metadata["type"] in ["range", "tol_range"]:
                     if isinstance(instance_value, Sequence):
                         class_dict[attribute_name] = list(flattened_values[current_index:current_index + len(instance_value)])
                         current_index += len(instance_value)
