@@ -6,5 +6,4 @@ matplotlib
 numpy
 scipy
 git+https://github.com/OpenOrion/paraflow.git@2.2.5#egg=paraflow
-git+https://github.com/OpenOrion/ezmesh.git#egg=ezmesh
 dacite

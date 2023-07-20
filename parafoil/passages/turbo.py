@@ -299,7 +299,7 @@ class TurboStagePassage(Passage):
             "CONV_NUM_METHOD_TURB": "SCALAR_UPWIND",
             "TIME_DISCRE_TURB": "EULER_IMPLICIT",
             "CFL_REDUCTION_TURB": 1.0,
-            "OUTER_ITER": 5000,
+            "OUTER_ITER": 3000,
             "CONV_RESIDUAL_MINVAL": -10,
             "CONV_STARTITER": 10,
             "CONV_CAUCHY_ELEMS": 100,
