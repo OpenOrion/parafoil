@@ -4,7 +4,7 @@ from typing import List, Optional
 import numpy as np
 import plotly.graph_objects as go
 import numpy.typing as npt
-from parafoil.metadata import opt_range, opt_constant
+from parafoil.metadata import opt_constant, opt_range, opt_tol_range
 from parafoil.utils import get_bspline, get_sampling
 from .airfoil import Airfoil
 
@@ -29,28 +29,28 @@ def get_thickness_dist_ctrl_pnts(
 class CamberThicknessAirfoil(Airfoil):
     "parametric airfoil using B-splines"
 
-    inlet_angle: float = field(metadata=opt_range(-np.pi/2, np.pi/2))
+    inlet_angle: float = field(metadata=opt_tol_range(np.radians(-10), np.radians(10)))
     "inlet angle (rad)"
 
-    outlet_angle: float = field(metadata=opt_range(-np.pi/2, np.pi/2))
+    outlet_angle: float = field(metadata=opt_tol_range(np.radians(-10), np.radians(10)))
     "outlet angle (rad)"
 
-    upper_thick_prop: List[float] = field(metadata=opt_range(0, 1))
+    upper_thick_prop: List[float] = field(metadata=opt_range(0.01, 0.05))
     "upper thickness proportion to chord length (length)"
 
-    lower_thick_prop: List[float] = field(metadata=opt_range(0, 1))
+    lower_thick_prop: List[float] = field(metadata=opt_range(0.01, 0.05))
     "lower thickness proportion to chord length (length)"
 
-    leading_prop: float = field(metadata=opt_range(0.0, 1.0))
+    leading_prop: float = field(metadata=opt_constant())
     "leading edge tangent line proportion [0.0-1.0] (dimensionless)"
 
-    trailing_prop: float = field(metadata=opt_range(0.0, 1.0))
+    trailing_prop: float = field(metadata=opt_constant())
     "trailing edge tangent line proportion [0.0-1.0] (dimensionless)"
 
     chord_length: float = field(default=1.0, metadata=opt_constant())
     "chord length (length)"
 
-    stagger_angle: Optional[float] = field(default=None, metadata=opt_range(-np.pi/2, np.pi/2))
+    stagger_angle: Optional[float] = None
     "stagger angle (rad)"
 
     num_samples: int = 50
@@ -81,6 +81,9 @@ class CamberThicknessAirfoil(Airfoil):
         self.sampling = get_sampling(self.num_samples, self.is_cosine_sampling)
         self.axial_chord_length = self.chord_length*np.cos(self.stagger_angle)
         self.height = self.chord_length*np.sin(self.stagger_angle)
+
+    def mutate(self, **kwargs):
+        return CamberThicknessAirfoil(**{**self.__dict__, **kwargs})
 
     @cached_property
     def camber_ctrl_pnts(self):

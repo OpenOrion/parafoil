@@ -7,3 +7,6 @@ def opt_range(min: float, max: float):
     
 def opt_constant():
     return {"type": "constant"}
+
+def opt_tol_range(min: float, max: float):
+    return {"type": "tol_range", "min": min, "max": max}

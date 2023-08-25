@@ -3,7 +3,7 @@ from functools import cached_property
 from typing import Any, Dict, Optional
 import numpy as np
 from plotly import graph_objects as go
-from paraflow import Passage, ConfigParameters
+from paraflow import Passage, SimulationOptions
 from parafoil.airfoils import Airfoil
 from ezmesh import Geometry, CurveLoop, PlaneSurface
 from parafoil.utils import get_sampling
@@ -40,8 +40,7 @@ class CircularPassage(Passage):
         y = self.radius * np.sin(theta)
         return np.column_stack((x, y))
 
-    @cached_property
-    def surfaces(self):
+    def get_surfaces(self, sim_options: Optional[SimulationOptions] = None):
         if self.mesh_params.airfoil_mesh_size is None:
             self.mesh_params.airfoil_mesh_size = 0.1 * self.airfoil.chord_length
         if self.mesh_params.passage_mesh_size is None:
@@ -63,9 +62,7 @@ class CircularPassage(Passage):
         )
 
         return [
-            PlaneSurface(
-                outlines=[farfield_curve_loop],
-            )
+            PlaneSurface(outlines=[farfield_curve_loop])
         ]
 
     def visualize(self, title: str = "Passage"):
@@ -96,7 +93,7 @@ class CircularPassage(Passage):
 
     def get_config(
         self,
-        config_params: ConfigParameters,
+        sim_options: SimulationOptions,
         working_directory: str,
         id: str,
     ) -> Dict[str, Any]:
@@ -104,12 +101,12 @@ class CircularPassage(Passage):
             "SOLVER": "EULER",
             "MATH_PROBLEM": "DIRECT",
             "RESTART_SOL": "NO",
-            "MACH_NUMBER": config_params.inlet_total_state.mach_number,
-            "AOA": config_params.angle_of_attack,
-            "FREESTREAM_PRESSURE": config_params.inlet_total_state.P,
-            "FREESTREAM_TEMPERATURE": config_params.inlet_total_state.T,
-            "GAMMA_VALUE": config_params.inlet_total_state.gamma,
-            "GAS_CONSTANT": config_params.inlet_total_state.gas_constant,
+            "MACH_NUMBER": sim_options.inlet_total_state.mach_number,
+            "AOA": sim_options.angle_of_attack,
+            "FREESTREAM_PRESSURE": sim_options.inlet_total_state.P,
+            "FREESTREAM_TEMPERATURE": sim_options.inlet_total_state.T,
+            "GAMMA_VALUE": sim_options.inlet_total_state.gamma,
+            "GAS_CONSTANT": sim_options.inlet_total_state.gas_constant,
             "REF_ORIGIN_MOMENT_X": 0.25,
             "REF_ORIGIN_MOMENT_Y": 0.00,
             "REF_ORIGIN_MOMENT_Z": 0.00,
@@ -151,7 +148,7 @@ class CircularPassage(Passage):
             "CONV_STARTITER": 10,
             "CONV_CAUCHY_ELEMS": 100,
             "CONV_CAUCHY_EPS": 1E-6,
-            "SCREEN_OUTPUT": "(INNER_ITER, WALL_TIME, RMS_RES, LIFT, DRAG, CAUCHY_SENS_PRESS, CAUCHY_DRAG RMS_ADJ_DENSITY RMS_ADJ_ENERGY)",
+            "HISTORY_OUTPUT": "(INNER_ITER, WALL_TIME, RMS_RES, LIFT, DRAG, CAUCHY_SENS_PRESS, CAUCHY_DRAG RMS_ADJ_DENSITY RMS_ADJ_ENERGY)",
             "MESH_FILENAME": f"{working_directory}/passage{id}.su2",
             "MESH_FORMAT": "SU2",
             "TABULAR_FORMAT": "CSV",

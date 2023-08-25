@@ -21,3 +21,5 @@ def get_bspline(ctrl_pnts: npt.NDArray, degree: int):
     )
     return BSpline(knots, ctrl_pnts, degree, extrapolate=False)
 
+
+

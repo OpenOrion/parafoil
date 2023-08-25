@@ -1,106 +1,110 @@
 import dataclasses
-import multiprocessing
+import json
 import pickle
-from typing import List, Literal, Optional, Sequence, Tuple, cast
+from typing import List, Optional, Sequence, cast
+import numpy as np
 from pymoo.core.problem import ElementwiseProblem
 from pymoo.algorithms.moo.nsga2 import NSGA2
 from pymoo.operators.crossover.sbx import SBX
 from pymoo.operators.mutation.pm import PM
-from pymoo.operators.sampling.rnd import FloatRandomSampling
 from pymoo.optimize import minimize
-from pymoo.core.problem import StarmapParallelization
 from paraflow.simulation.simulation import run_simulation
-from paraflow.passages import ConfigParameters, Passage
+from paraflow.passages import SimulationOptions, Passage
 from dacite.core import from_dict
-
 from parafoil.passages.turbo import TurboStagePassage
-
-MaxOrMin = Literal["max", "min"]
-
-n_proccess = 1
-pool = multiprocessing.Pool(n_proccess)
-runner = StarmapParallelization(pool.starmap)
-
-OBJECTIVE_TYPES = Literal["efficiency"]
 
 
 class BaseOptimizer(ElementwiseProblem):
-
     def __init__(
         self,
         working_directory: str,
         passage: Passage,
-        config_params: ConfigParameters,
-        objectives: List[Tuple[OBJECTIVE_TYPES, MaxOrMin]],
+        sim_options: SimulationOptions,
     ):
         self.working_directory = working_directory
         self.passage = passage
-        self.config_params = config_params
-        self.objectives = objectives
-        self.passage_type = type(passage)
-        mins, maxs = get_opt_init(passage, self.passage_type)
+        self.sim_options = sim_options
+        self.passage_type = TurboStagePassage
+        mins, maxs = get_mins_maxs(passage, self.passage_type)
         self.id = 0
+
+        self.num_processes = 10
+        # num_processes = multiprocessing.cpu_count()
+        # pool = multiprocessing.Pool(num_processes)
+        # runner = StarmapParallelization(pool.starmap)
 
         super().__init__(
             n_var=len(mins),
-            n_obj=len(self.objectives),
-            n_ieq_constr=0,
+            n_obj=1,
+            n_ieq_constr=1,
             xl=mins,
             xu=maxs,
             # elementwise_runner=runner
         )
 
     def get_passage_candidate(self, x):
-        passage = cast(self.passage_type, create_opt_class_dict(self.passage, self.passage_type, x))
+        passage = cast(self.passage_type, get_class_from_arr(self.passage, self.passage_type, x))
         self.id += 1
-        return run_simulation(
+        candidate = run_simulation(
             passage,
-            config_params=self.config_params,
-            working_directory="/workspaces/parafoil/simulation_out", 
+            sim_options=self.sim_options,
+            working_directory=self.working_directory, 
             id=f"{self.id}",
-            auto_delete=True
+            auto_delete=False,
+            num_procs=self.num_processes,
+            sim_config={
+                "custom_mpirun_path": "/usr/bin/mpirun",
+                "custom_download_url": "https://github.com/OpenOrion/SU2/releases/download/7.5.2-linux64-mpi/SU2-7.5.2-linux64-mpi.zip"
+            }
         )
+        with open(f"{self.working_directory}/passage_{self.id}.json", "w") as fp:
+            json.dump(passage.to_dict(), fp)
+        return candidate
 
-    def _evaluate(self, x, out, *args, **kwargs):
-        out["F"] = []
-        out["G"] = []
-
-
-
-class TurboStageOptimizer(BaseOptimizer):
     def _evaluate(self, x, out, *args, **kwargs):
         candidate = self.get_passage_candidate(x)
-        out["F"] = []
-        out["G"] = []
+        
+        if "Exit Success (SU2_CFD)" in candidate.log_output:
+            efficiency = float(candidate.eval_values.loc[candidate.eval_values.index[-1], '  "TotTotEff[1]"  '])
+            # 0 is valid, 0 <= 0 is true
+            valid = 0
+        else:
+            efficiency = 1E10     
+            valid = 1     
+        out["F"] = [-efficiency]
+        out["G"] = [valid]
 
 
-def optimize(problem: ElementwiseProblem, output_file: Optional[str] = None):
-    algorithm = NSGA2(
-        pop_size=40,
-        n_offsprings=10,
-        sampling=FloatRandomSampling(),
-        crossover=SBX(prob=0.9, eta=15),
-        mutation=PM(eta=20),
-        eliminate_duplicates=True
-    )
+    def optimize(self, output_file: str = "optimized.pkl"):
+        initial_sampling = get_arr_from_class(self.passage, self.passage_type)
 
-    res = minimize(
-        problem,
-        algorithm,
-        ("n_gen", 10000),
-        seed=1,
-        save_history=True,
-        verbose=True
-    )
+        algorithm = NSGA2(
+            pop_size=40,
+            n_offsprings=10,
+            sampling=np.array(initial_sampling),
+            crossover=SBX(prob=0.9, eta=15),
+            mutation=PM(eta=20),
+            eliminate_duplicates=True
+        )
 
-    # X, F = res.opt.get("X", "F")
-    if output_file:
-        with open(output_file, 'wb') as optimization_result_file:
-            pickle.dump(res, optimization_result_file, pickle.HIGHEST_PROTOCOL)
+        res = minimize(
+            self,
+            algorithm,
+            ("n_eval", 500),
+            seed=1,
+            save_history=True,
+            verbose=True
+        )
 
-    return res
+        # X, F = res.opt.get("X", "F")
+        if output_file:
+            with open(output_file, 'wb') as optimization_result_file:
+                pickle.dump(res, optimization_result_file, pickle.HIGHEST_PROTOCOL)
 
-def get_opt_init(
+        return res
+
+
+def get_mins_maxs(
     instance,
     cls,
     mins: List[float] = [],
@@ -110,20 +114,50 @@ def get_opt_init(
     for field in fields:
         instance_value = getattr(instance, field.name)
         if field.metadata and "type" in field.metadata:
-            if field.metadata["type"] == "range":
-                if isinstance(instance_value, Sequence):
-                    mins += [field.metadata["min"]] * len(instance_value)
-                    maxs += [field.metadata["max"]] * len(instance_value)
+            if field.metadata["type"] in ["range", "tol_range"]:
+                if field.metadata["type"] == "tol_range":
+                    min = instance_value + field.metadata["min"]
+                    max = instance_value + field.metadata["max"]
                 else:
-                    mins.append(field.metadata["min"])
-                    maxs.append(field.metadata["max"])
+                    min = field.metadata["min"]
+                    max = field.metadata["max"]
+
+                if isinstance(instance_value, Sequence):
+                    mins += [min] * len(instance_value)
+                    maxs += [max] * len(instance_value)
+                else:
+                    mins.append(min)
+                    maxs.append(max)
+                
+
 
             if dataclasses.is_dataclass(field.type) and field.metadata["type"] == "class":
-                mins, maxs = get_opt_init(instance_value, field.type, mins, maxs)
+                mins, maxs = get_mins_maxs(instance_value, field.type, mins, maxs)
 
     return mins, maxs
 
-def create_opt_class_dict(
+def get_arr_from_class(
+    instance,
+    cls,
+    instance_values: List[float] = [],
+):
+    fields = dataclasses.fields(cls)
+    for field in fields:
+        instance_value = getattr(instance, field.name)
+        if field.metadata and "type" in field.metadata:
+            if field.metadata["type"] in ["range", "tol_range"]:
+                if isinstance(instance_value, Sequence):
+                    instance_values += instance_value
+                else:
+                    instance_values.append(instance_value)
+
+            if dataclasses.is_dataclass(field.type) and field.metadata["type"] == "class":
+                instance_values = get_arr_from_class(instance_value, field.type, instance_values)
+
+    return instance_values
+
+
+def get_class_from_arr(
     instance,
     cls,
     flattened_values: List[float],
@@ -138,9 +172,9 @@ def create_opt_class_dict(
         instance_value = getattr(instance, attribute_name)
         if attribute_metadata:
             if "type" in attribute_metadata:
-                if attribute_metadata["type"] == "range":
+                if attribute_metadata["type"] in ["range", "tol_range"]:
                     if isinstance(instance_value, Sequence):
-                        class_dict[attribute_name] = flattened_values[current_index:current_index + len(instance_value)]
+                        class_dict[attribute_name] = list(flattened_values[current_index:current_index + len(instance_value)])
                         current_index += len(instance_value)
                     else:
                         class_dict[attribute_name] = flattened_values[current_index]
@@ -150,7 +184,7 @@ def create_opt_class_dict(
                     class_dict[attribute_name] = instance_value
 
             if dataclasses.is_dataclass(field.type) and attribute_metadata["type"] == "class":
-                nested_metadata = create_opt_class_dict(instance_value, field.type, flattened_values, current_index)
+                nested_metadata = get_class_from_arr(instance_value, field.type, flattened_values, current_index)
                 class_dict[attribute_name] = nested_metadata
     
     if current_index == 0:
