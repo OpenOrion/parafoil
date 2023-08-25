@@ -148,7 +148,7 @@ class CircularPassage(Passage):
             "CONV_STARTITER": 10,
             "CONV_CAUCHY_ELEMS": 100,
             "CONV_CAUCHY_EPS": 1E-6,
-            "SCREEN_OUTPUT": "(INNER_ITER, WALL_TIME, RMS_RES, LIFT, DRAG, CAUCHY_SENS_PRESS, CAUCHY_DRAG RMS_ADJ_DENSITY RMS_ADJ_ENERGY)",
+            "HISTORY_OUTPUT": "(INNER_ITER, WALL_TIME, RMS_RES, LIFT, DRAG, CAUCHY_SENS_PRESS, CAUCHY_DRAG RMS_ADJ_DENSITY RMS_ADJ_ENERGY)",
             "MESH_FILENAME": f"{working_directory}/passage{id}.su2",
             "MESH_FORMAT": "SU2",
             "TABULAR_FORMAT": "CSV",

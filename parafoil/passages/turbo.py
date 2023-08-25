@@ -235,10 +235,6 @@ class TurboStagePassage(Passage):
         working_directory: str,
         id: str,
     ) -> Dict[str, Any]:
-        # config_params.inlet_total_state.nu
-
-        # 
-
         assert sim_params.translation is not None, "Translation must be specified for turbo stage passage"
         assert sim_params.target_outlet_static_state is not None, "Target outlet static state must be specified for turbo stage passage"
         inflow_mesh_params = self.inflow_passage.mesh_params
@@ -307,6 +303,7 @@ class TurboStagePassage(Passage):
             "MESH_FILENAME": f"{working_directory}/passage{id}.su2",
             "MESH_FORMAT": "SU2",
             "TABULAR_FORMAT": "CSV",
+            **({} if id == "0" else {"SOLUTION_FILENAME": f"{working_directory}/restart_flow{int(id)-1}.dat"}),
             "VOLUME_FILENAME": f"{working_directory}/flow{id}.vtu",
             "RESTART_FILENAME":  f"{working_directory}/restart_flow{id}.dat",
             "SURFACE_FILENAME":  f"{working_directory}/surface_flow{id}.vtu",
@@ -347,7 +344,6 @@ class TurboStagePassage(Passage):
             "RAMP_OUTLET_PRESSURE": "NO", # YES can help with convergence
             "RAMP_OUTLET_PRESSURE_COEFF": "(140000.0, 10.0, 2000)",
             "MARKER_PLOTTING": f"({inflow_mesh_params.airfoil_label}, {outflow_mesh_params.airfoil_label})",
-            # "OUTPUT_WRT_FREQ": 10,
             "VOLUME_OUTPUT": "(SOLUTION, RESIDUAL, PRIMITIVE)"
         }
 

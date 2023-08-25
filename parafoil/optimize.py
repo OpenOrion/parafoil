@@ -75,7 +75,7 @@ class BaseOptimizer(ElementwiseProblem):
         out["G"] = [valid]
 
 
-    def optimize(self, output_file: Optional[str] = None):
+    def optimize(self, output_file: str = "optimized.pkl"):
         initial_sampling = get_arr_from_class(self.passage, self.passage_type)
 
         algorithm = NSGA2(
