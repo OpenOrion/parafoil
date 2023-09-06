@@ -78,5 +78,5 @@ pip install -r requirements_dev.txt
 ```
 
 # Help Wanted
-Right now there are some items such as CFD meshing and adding more shaping. Please join the [Discord](https://discord.gg/H7qRauGkQ6) for project communications and collaboration. Please consider donating to the [Patreon](https://www.patreon.com/turbodesigner) to support future work on this project.
+Right now there are some items such as CFD meshing and adding more shaping. Please join the [Discord](https://discord.gg/H7qRauGkQ6) for project communications and collaboration. Please consider donating to the [Patreon](https://www.patreon.com/openorion) to support future work on this project.
 
