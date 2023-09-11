@@ -1,5 +1,6 @@
 plotly==5.11.0
 ipywidgets==7.6
+ipython_genutils
 jupyterlab
 matplotlib
 
