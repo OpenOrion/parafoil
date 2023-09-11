@@ -13,6 +13,6 @@ setup(
     "numpy",
     "scipy",
     "dacite",
-    "paraflow @ git+https://github.com/OpenOrion/paraflow.git@3.0.0"
+    "paraflow @ git+https://github.com/OpenOrion/paraflow.git@3.1.0"
    ]
 )
