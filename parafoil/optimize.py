@@ -1,7 +1,7 @@
 import dataclasses
 import json
 import pickle
-from typing import List, Optional, Sequence, cast
+from typing import List, Sequence, cast
 import numpy as np
 from pymoo.core.problem import ElementwiseProblem
 from pymoo.algorithms.moo.nsga2 import NSGA2
@@ -9,21 +9,21 @@ from pymoo.operators.crossover.sbx import SBX
 from pymoo.operators.mutation.pm import PM
 from pymoo.optimize import minimize
 from paraflow.simulation.simulation import run_simulation
-from paraflow.passages import SimulationOptions, Passage
+from paraflow.passages import SimulationParams, Passage
 from dacite.core import from_dict
 from parafoil.passages.turbo import TurboStagePassage
-
+from paraflow.simulation.su2 import Su2SimulationConfig
 
 class BaseOptimizer(ElementwiseProblem):
     def __init__(
         self,
         working_directory: str,
         passage: Passage,
-        sim_options: SimulationOptions,
+        sim_params: SimulationParams,
     ):
         self.working_directory = working_directory
         self.passage = passage
-        self.sim_options = sim_options
+        self.sim_params = sim_params
         self.passage_type = TurboStagePassage
         mins, maxs = get_mins_maxs(passage, self.passage_type)
         self.id = 0
@@ -43,19 +43,19 @@ class BaseOptimizer(ElementwiseProblem):
         )
 
     def get_passage_candidate(self, x):
-        passage = cast(self.passage_type, get_class_from_arr(self.passage, self.passage_type, x))
+        passage = cast(Passage, get_class_from_arr(self.passage, self.passage_type, x))
         self.id += 1
         candidate = run_simulation(
             passage,
-            sim_options=self.sim_options,
+            params=self.sim_params,
             working_directory=self.working_directory, 
             id=f"{self.id}",
             auto_delete=False,
             num_procs=self.num_processes,
-            sim_config={
-                "custom_mpirun_path": "/usr/bin/mpirun",
-                "custom_download_url": "https://github.com/OpenOrion/SU2/releases/download/7.5.2-linux64-mpi/SU2-7.5.2-linux64-mpi.zip"
-            }
+            cfg=Su2SimulationConfig(
+                custom_mpirun_path= "/usr/bin/mpirun",
+                custom_download_url= "https://github.com/OpenOrion/SU2/releases/download/7.5.2-linux64-mpi/SU2-7.5.2-linux64-mpi.zip"
+            )
         )
         with open(f"{self.working_directory}/passage_{self.id}.json", "w") as fp:
             json.dump(passage.to_dict(), fp)

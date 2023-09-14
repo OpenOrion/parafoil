@@ -7,7 +7,7 @@ from plotly import graph_objects as go
 from parafoil.airfoils import CamberThicknessAirfoil
 from parafoil.metadata import opt_class, opt_constant, opt_range
 from ezmesh import CurveLoop, PlaneSurface, BoundaryLayerField, Geometry
-from paraflow import Passage, SimulationOptions
+from paraflow import Passage, SimulationParams
 
 from parafoil.passages.utils import get_wall_distance
 
@@ -108,7 +108,7 @@ class TurboRowPassage(Passage):
             airfoils_coords.append(airfoil_offseted_coords)
         return airfoils_coords
 
-    def get_surfaces(self, sim_options: Optional[SimulationOptions] = None):
+    def get_surfaces(self, params: Optional[SimulationParams] = None):
         if self.mesh_params.airfoil_mesh_size is None:
             self.mesh_params.airfoil_mesh_size = 0.02 * self.airfoil.chord_length
         if self.mesh_params.boundary_layer_thickness is None:
@@ -122,11 +122,11 @@ class TurboRowPassage(Passage):
         if isinstance(self.mesh_params.airfoil_label, List):
             assert len(self.mesh_params.airfoil_label) == len(airfoils_coords)
 
-        if sim_options:
+        if params:
             y_plus = get_wall_distance(
-                rho=sim_options.inlet_total_state.rho_mass(),
-                Uf=sim_options.inlet_total_state.freestream_velocity,
-                mu=sim_options.inlet_total_state.mu(),
+                rho=params.inlet_total_state.rho_mass(),
+                Uf=params.inlet_total_state.freestream_velocity,
+                mu=params.inlet_total_state.mu(),
                 L=self.airfoil.chord_length,
                 y_plus_desired=1.0
             )
@@ -219,8 +219,8 @@ class TurboStagePassage(Passage):
     def __post_init__(self):
         self.outflow_passage.offset = [self.inflow_passage.width, 0]
 
-    def get_surfaces(self, sim_options: Optional[SimulationOptions] = None):
-        return [*self.inflow_passage.get_surfaces(sim_options), *self.outflow_passage.get_surfaces(sim_options)]
+    def get_surfaces(self, params: Optional[SimulationParams] = None):
+        return [*self.inflow_passage.get_surfaces(params), *self.outflow_passage.get_surfaces(params)]
 
     def visualize(self, title: str = "Passage"):
         self.inflow_passage.visualize(title)
@@ -231,29 +231,29 @@ class TurboStagePassage(Passage):
 
     def get_config(
         self,
-        sim_params: SimulationOptions,
+        params: SimulationParams,
         working_directory: str,
         id: str,
     ) -> Dict[str, Any]:
-        assert sim_params.translation is not None, "Translation must be specified for turbo stage passage"
-        assert sim_params.target_outlet_static_state is not None, "Target outlet static state must be specified for turbo stage passage"
+        assert params.translation is not None, "Translation must be specified for turbo stage passage"
+        assert params.target_outlet_static_state is not None, "Target outlet static state must be specified for turbo stage passage"
         inflow_mesh_params = self.inflow_passage.mesh_params
         outflow_mesh_params = self.outflow_passage.mesh_params
-        turb_kind = "TURBINE" if sim_params.translation[0] is None else "COMPRESSOR"
+        turb_kind = "TURBINE" if params.translation[0] is None else "COMPRESSOR"
         return {
             "SOLVER": "RANS",
             "KIND_TURB_MODEL": "SST",
             "MATH_PROBLEM": "DIRECT",
             "RESTART_SOL": "NO",
             "SYSTEM_MEASUREMENTS": "SI",
-            "MACH_NUMBER": sim_params.inlet_total_state.mach_number,
-            "AOA": sim_params.angle_of_attack,
+            "MACH_NUMBER": params.inlet_total_state.mach_number,
+            "AOA": params.angle_of_attack,
             "SIDESLIP_ANGLE": 0.0,
             "INIT_OPTION": "TD_CONDITIONS",
             "FREESTREAM_OPTION": "TEMPERATURE_FS",
-            "FREESTREAM_PRESSURE": sim_params.inlet_total_state.P,
-            "FREESTREAM_TEMPERATURE": sim_params.inlet_total_state.T,
-            "FREESTREAM_DENSITY": sim_params.inlet_total_state.rho_mass(),
+            "FREESTREAM_PRESSURE": params.inlet_total_state.P,
+            "FREESTREAM_TEMPERATURE": params.inlet_total_state.T,
+            "FREESTREAM_DENSITY": params.inlet_total_state.rho_mass(),
             
             "FREESTREAM_TURBULENCEINTENSITY": 0.05, # standard for turbomachinery
             "FREESTREAM_TURB2LAMVISCRATIO": 100.0, # standard for turbomachinery
@@ -264,8 +264,8 @@ class TurboStagePassage(Passage):
             "REF_AREA": 1.0,
             "REF_DIMENSIONALIZATION": "DIMENSIONAL",
             "FLUID_MODEL": "IDEAL_GAS",
-            "GAMMA_VALUE": sim_params.inlet_total_state.gamma,
-            "GAS_CONSTANT": sim_params.inlet_total_state.gas_constant,
+            "GAMMA_VALUE": params.inlet_total_state.gamma,
+            "GAS_CONSTANT": params.inlet_total_state.gas_constant,
             "VISCOSITY_MODEL": "SUTHERLAND",
             "MU_REF": 1.716E-5,
             "MU_T_REF": 273.15,
@@ -316,15 +316,15 @@ class TurboStagePassage(Passage):
                     **({
                         "GRID_MOVEMENT": "STEADY_TRANSLATION",
                         "MACH_MOTION": 0.35,
-                        "TRANSLATION_RATE": f"{sim_params.translation[0][0]} {sim_params.translation[0][1]} {sim_params.translation[0][2]}",
-                    } if sim_params.translation[0] is not None else {"GRID_MOVEMENT": "NONE"})
+                        "TRANSLATION_RATE": f"{params.translation[0][0]} {params.translation[0][1]} {params.translation[0][2]}",
+                    } if params.translation[0] is not None else {"GRID_MOVEMENT": "NONE"})
                 },
                 f"{working_directory}/zone_{id}_2.cfg": {
                     **({
                         "GRID_MOVEMENT": "STEADY_TRANSLATION",
                         "MACH_MOTION": 0.35,
-                        "TRANSLATION_RATE": f"{sim_params.translation[1][0]} {sim_params.translation[1][1]} {sim_params.translation[1][2]}",
-                    } if sim_params.translation[1] is not None else {"GRID_MOVEMENT": "NONE"})
+                        "TRANSLATION_RATE": f"{params.translation[1][0]} {params.translation[1][1]} {params.translation[1][2]}",
+                    } if params.translation[1] is not None else {"GRID_MOVEMENT": "NONE"})
                 }
             },
             "MARKER_HEATFLUX": f"( {inflow_mesh_params.airfoil_label}, 0.0, {outflow_mesh_params.airfoil_label}, 0.0)",
@@ -335,7 +335,7 @@ class TurboStagePassage(Passage):
             "MARKER_MIXINGPLANE_INTERFACE": f"({inflow_mesh_params.outlet_label}, {outflow_mesh_params.inlet_label})",
             "MARKER_ZONE_INTERFACE": f"({inflow_mesh_params.outlet_label}, {outflow_mesh_params.inlet_label})",
 
-            "MARKER_GILES": f"({inflow_mesh_params.inlet_label}, TOTAL_CONDITIONS_PT, {sim_params.inlet_total_state.P}, {sim_params.inlet_total_state.T}, 1.0, 0.0, 0.0,1.0,1.0, {inflow_mesh_params.outlet_label}, MIXING_OUT, 0.0, 0.0, 0.0, 0.0, 0.0,1.0,1.0, {outflow_mesh_params.inlet_label}, MIXING_IN, 0.0, 0.0, 0.0, 0.0, 0.0,1.0, 1.0 {outflow_mesh_params.outlet_label}, STATIC_PRESSURE, {sim_params.target_outlet_static_state.P}, 0.0, 0.0, 0.0, 0.0,1.0,1.0)",
+            "MARKER_GILES": f"({inflow_mesh_params.inlet_label}, TOTAL_CONDITIONS_PT, {params.inlet_total_state.P}, {params.inlet_total_state.T}, 1.0, 0.0, 0.0,1.0,1.0, {inflow_mesh_params.outlet_label}, MIXING_OUT, 0.0, 0.0, 0.0, 0.0, 0.0,1.0,1.0, {outflow_mesh_params.inlet_label}, MIXING_IN, 0.0, 0.0, 0.0, 0.0, 0.0,1.0, 1.0 {outflow_mesh_params.outlet_label}, STATIC_PRESSURE, {params.target_outlet_static_state.P}, 0.0, 0.0, 0.0, 0.0,1.0,1.0)",
             "SPATIAL_FOURIER": "NO", # YES if issues with wave reflection
             "TURBOMACHINERY_KIND": "AXIAL AXIAL",
             "TURBO_PERF_KIND": f"{turb_kind} {turb_kind}",
