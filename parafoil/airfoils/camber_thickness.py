@@ -1,4 +1,4 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, asdict
 from functools import cached_property
 from typing import List, Optional
 import numpy as np
@@ -83,7 +83,7 @@ class CamberThicknessAirfoil(Airfoil):
         self.height = self.chord_length*np.sin(self.stagger_angle)
 
     def mutate(self, **kwargs):
-        return CamberThicknessAirfoil(**{**self.__dict__, **kwargs})
+        return CamberThicknessAirfoil(**{**asdict(self), **kwargs})
 
     @cached_property
     def camber_ctrl_pnts(self):
