@@ -1,15 +1,20 @@
 from dataclasses import asdict, dataclass, field
 from functools import cached_property
-from typing import Any, Dict, List, Literal, Optional, Union, cast
+from typing import Any, Dict, List, Literal, Optional, Sequence, Union, cast
 import numpy as np
 import numpy.typing as npt
+from paraflow.passages.passage import SimulationParams
 from plotly import graph_objects as go
 from parafoil.airfoils import CamberThicknessAirfoil
 from parafoil.metadata import opt_class, opt_constant, opt_range
-from ezmesh import CurveLoop, PlaneSurface, BoundaryLayerField, Geometry
 from paraflow import Passage, SimulationParams
 
 from parafoil.passages.utils import get_wall_distance
+
+from meshql import GeometryQL
+import cadquery as cq
+from jupyter_cadquery import show
+from parafoil.utils import ExtendedWorkplane, get_bspline, get_sampling
 
 
 @dataclass
@@ -63,13 +68,31 @@ class TurboRowPassage(Passage):
         self.width = self.airfoil.axial_chord_length + self.leading_edge_gap + self.trailing_edge_gap
         self.spacing = self.airfoil.chord_length * self.spacing_to_chord
         self.height = self.spacing * self.num_airfoils
-        self.surfaces = self.get_surfaces()
+
+
+        self.degree = 3
+        self.sampling = get_sampling(self.num_samples, self.is_cosine_sampling)
+
+
+        # airfoils_coords = self.get_airfoils_coords()
+        top_offset = np.array([0, self.total_spacing/2]) + self.offset
+        bottom_offset = np.array([0, -self.total_spacing/2]) + self.offset
+        if self.type == "camber":
+            top_ctrl_pnts = bottom_ctrl_pnts = self.get_ctrl_pnts("camber")
+        else: 
+            top_ctrl_pnts = self.get_ctrl_pnts("top")
+            bottom_ctrl_pnts = self.get_ctrl_pnts("bottom")
+
+        self.top_ctrl_pnts = top_ctrl_pnts + top_offset
+        self.bottom_ctrl_pnts = bottom_ctrl_pnts[::-1] + bottom_offset
+
+
     @cached_property
     def total_spacing(self):
         return self.spacing * self.num_airfoils
 
-    def get_coords(self) -> npt.NDArray[np.float64]:
-        return self.surfaces[0].curve_loops[0].get_exterior_coords(self.num_samples, self.is_cosine_sampling)
+    # def get_coords(self) -> npt.NDArray[np.float64]:
+    #     return self.surfaces[0].curve_loops[0].get_exterior_coords(self.num_samples, self.is_cosine_sampling)
 
     def get_ctrl_pnts(self, type: Literal["top", "bottom", "camber"] = "top") -> npt.NDArray[np.float64]:
         if type == "camber":
@@ -94,118 +117,151 @@ class TurboRowPassage(Passage):
             np.array([self.leading_edge_gap + self.trailing_edge_gap + self.airfoil.axial_chord_length, ctrl_coords[-1][1]]),
         ])
 
-    def get_airfoils_coords(self):
-        airfoil_coords = self.airfoil.get_coords()
-        airfoil_leading_pnt = airfoil_coords[np.argmin(airfoil_coords[:, 0])]
+    def get_airfoil_profile(self, workplane: ExtendedWorkplane = ExtendedWorkplane("XY")):
+        # airfoil_coords = self.get_airfoils_coords()[0]
+        top_coords = get_bspline(self.airfoil.top_ctrl_pnts, self.airfoil.degree)(self.airfoil.sampling)
+        bottom_coords = get_bspline(self.airfoil.bottom_ctrl_pnts, self.airfoil.degree)(self.airfoil.sampling)
 
-        airfoils_coords = []
+
+        # for i in range(self.num_airfoils):
+        #     airfoil_offseted_coords = airfoil_coords+airfoil_offset-np.array([0, i*self.spacing]) + self.offset  # type: ignore
+        #     airfoils_coords.append(airfoil_offseted_coords)
+
+
+        airfoil_leading_pnt = top_coords[np.argmin(top_coords[:, 0])]
         airfoil_offset = np.array([
-            self.leading_edge_gap-np.min(airfoil_coords[:, 0]),
+            self.leading_edge_gap-np.min(top_coords[:, 0]),
             (self.total_spacing/2) - (self.spacing/2) - airfoil_leading_pnt[1]
         ])
-        for i in range(self.num_airfoils):
-            airfoil_offseted_coords = airfoil_coords+airfoil_offset-np.array([0, i*self.spacing]) + self.offset  # type: ignore
-            airfoils_coords.append(airfoil_offseted_coords)
-        return airfoils_coords
 
-    def get_surfaces(self, params: Optional[SimulationParams] = None):
-        if self.mesh_params.airfoil_mesh_size is None:
-            self.mesh_params.airfoil_mesh_size = 0.02 * self.airfoil.chord_length
-        if self.mesh_params.boundary_layer_thickness is None:
-            self.mesh_params.boundary_layer_thickness = 0.01 * self.airfoil.chord_length
-        if self.mesh_params.boundary_wall_mesh_size is None:
-            self.mesh_params.boundary_wall_mesh_size = 0.01 * self.airfoil.chord_length
-        if self.mesh_params.passage_mesh_size is None:
-            self.mesh_params.passage_mesh_size = 0.025 * self.airfoil.chord_length
+        return (
+            workplane
+            .spline(top_coords + airfoil_offset)
+            .spline(bottom_coords[::-1] + airfoil_offset)
 
-        airfoils_coords = self.get_airfoils_coords()
-        if isinstance(self.mesh_params.airfoil_label, List):
-            assert len(self.mesh_params.airfoil_label) == len(airfoils_coords)
-
-        if params:
-            y_plus = get_wall_distance(
-                rho=params.inlet_total_state.rho_mass(),
-                Uf=params.inlet_total_state.freestream_velocity,
-                mu=params.inlet_total_state.mu(),
-                L=self.airfoil.chord_length,
-                y_plus_desired=1.0
-            )
-        else:
-            y_plus = 0.001 * self.airfoil.chord_length
-
-
-        airfoil_curve_loops = [
-            CurveLoop.from_coords(
-                airfoil_coords[:-1],
-                mesh_size=self.mesh_params.airfoil_mesh_size,
-                curve_labels=self.mesh_params.airfoil_label[i] if isinstance(self.mesh_params.airfoil_label, List) else self.mesh_params.airfoil_label,
-                fields=[
-                    BoundaryLayerField(
-                        hwall_n=y_plus,
-                        hfar=0.001,
-                        thickness=self.mesh_params.boundary_layer_thickness,
-                        ratio=1.1,
-                        is_quad_mesh=True,
-                        intersect_metrics=False
-                    )
-                ],
-            )
-            for i, airfoil_coords in enumerate(airfoils_coords)
-        ]
-
-        top_offset = np.array([0, self.total_spacing/2]) + self.offset
-        bottom_offset = np.array([0, -self.total_spacing/2]) + self.offset
-        if self.type == "camber":
-            top_ctrl_pnts = bottom_ctrl_pnts = self.get_ctrl_pnts("camber")
-        else: 
-            top_ctrl_pnts = self.get_ctrl_pnts("top")
-            bottom_ctrl_pnts = self.get_ctrl_pnts("bottom")
-
-        curve_labels=[self.mesh_params.top_label, self.mesh_params.outlet_label, self.mesh_params.bottom_label, self.mesh_params.inlet_label]
-        
-        curve_type = "LineSegment" if self.type == "line" else "BSpline"
-        passage_curve_loop = CurveLoop.from_coords(
-            [
-                (curve_type, top_ctrl_pnts + top_offset),
-                (curve_type, bottom_ctrl_pnts[::-1] + bottom_offset)
-            ],
-            mesh_size=self.mesh_params.passage_mesh_size,
-            curve_labels=curve_labels,
-            holes=airfoil_curve_loops
+            .close()
         )
 
-        return [PlaneSurface(outlines=[passage_curve_loop])]
+    def get_profile(self, workplane: ExtendedWorkplane = ExtendedWorkplane("XY"), with_airfoils: bool = True):
+        top_coords = get_bspline(self.top_ctrl_pnts, self.degree)(self.sampling)
+        bottom_coords = get_bspline(self.bottom_ctrl_pnts, self.degree)(self.sampling)
 
+        profile = (
+            workplane
 
-    def visualize(self, title: str = "Passage"):
-        fig = go.Figure(
-            layout=go.Layout(title=go.layout.Title(text=title))
+            .spline(top_coords)
+            .lineTo(*self.bottom_ctrl_pnts[0])
+            .spline(bottom_coords)
+            .close()
         )
-        coords = self.get_coords()
-        fig.add_trace(go.Scatter(
-            x=coords[:, 0],
-            y=coords[:, 1],
-            fill="toself",
-            legendgroup="passage",
-            name=f"Passage"
-        ))
 
-        for i in range(self.num_airfoils):
-            airfoil_coords = self.surfaces[0].outlines[0].holes[i].get_exterior_coords(self.airfoil.num_samples)
-            fig.add_trace(go.Scatter(
-                x=airfoil_coords[:, 0],
-                y=airfoil_coords[:, 1],
-                fill="toself",
-                legendgroup="airfoil",
-                legendgrouptitle_text="Airfoils",
-                name=f"Airfoil {i+1}"
+        if with_airfoils:
+            profile = self.get_airfoil_profile(profile)
 
-            ))
-        fig.layout.yaxis.scaleanchor = "x"  # type: ignore
-        fig.show()
+        return profile
+
+
+
+    # def visualize(self, title: str = "Passage"):
+    #     fig = go.Figure(
+    #         layout=go.Layout(title=go.layout.Title(text=title))
+    #     )
+    #     coords = self.get_coords()
+    #     fig.add_trace(go.Scatter(
+    #         x=coords[:, 0],
+    #         y=coords[:, 1],
+    #         fill="toself",
+    #         legendgroup="passage",
+    #         name=f"Passage"
+    #     ))
+
+    #     for i in range(self.num_airfoils):
+    #         airfoil_coords = self.surfaces[0].outlines[0].holes[i].get_exterior_coords(self.airfoil.num_samples)
+    #         fig.add_trace(go.Scatter(
+    #             x=airfoil_coords[:, 0],
+    #             y=airfoil_coords[:, 1],
+    #             fill="toself",
+    #             legendgroup="airfoil",
+    #             legendgrouptitle_text="Airfoils",
+    #             name=f"Airfoil {i+1}"
+
+    #         ))
+    #     fig.layout.yaxis.scaleanchor = "x"  # type: ignore
+    #     fig.show()
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
+
+    def clone(self, airfoil: CamberThicknessAirfoil):
+        return TurboRowPassage(
+            airfoil=airfoil,
+            spacing_to_chord=self.spacing_to_chord,
+            leading_edge_gap_to_chord=self.leading_edge_gap_to_chord,
+            trailing_edge_gap_to_chord=self.trailing_edge_gap_to_chord,
+            num_airfoils=self.num_airfoils,
+            offset=self.offset,
+            num_samples=self.num_samples,
+            is_cosine_sampling=self.is_cosine_sampling,
+            type=self.type,
+            mesh_params=self.mesh_params
+        )
+
+
+
+@dataclass
+class TurboRow3DPassage(Passage):
+    row_passages: Sequence[TurboRowPassage] = field(metadata=opt_class())
+    
+    radii: Sequence[float]
+    "radii of the passages"
+
+    def get_meshes(self, params: SimulationParams | None = None):
+        with GeometryQL() as geo:
+            (
+                geo
+                .load(self.get_profile())
+                .refine(1)
+                .generate()
+                .show("gmsh")
+            )
+
+    def get_profile(self, params: Optional[SimulationParams] = None):
+        passage_profile = ExtendedWorkplane("XY")
+        airfoil_profile = ExtendedWorkplane("XY")
+        for i, row_passage in enumerate(self.row_passages):
+            passage_profile = (
+                row_passage.get_profile(
+                    passage_profile
+                    .transformed(offset=cq.Vector(0, 0, self.radii[i]-self.radii[i-1] if i else 0)),
+                    with_airfoils=False
+                )
+            )
+
+            airfoil_profile = (
+                row_passage.get_airfoil_profile(
+                    airfoil_profile
+                    .transformed(offset=cq.Vector(0, 0, self.radii[i]-self.radii[i-1] if i else 0))
+                )
+            )
+
+        passage_profile = passage_profile.sweep(
+            ExtendedWorkplane("XZ").lineTo(x=0, y=(self.radii[-1])-(self.radii[0])),
+            multisection=True,
+            makeSolid=True
+        )
+
+        airfoil_profile = airfoil_profile.sweep(
+            ExtendedWorkplane("XZ").lineTo(x=0, y=(self.radii[-1])-(self.radii[0])),
+            multisection=True,
+            makeSolid=True
+        )
+
+        profile = passage_profile.cut(airfoil_profile)
+        show(profile)
+        return profile
+
+    def to_dict(self) -> Dict[str, Any]:
+        return super().to_dict()
 
 
 @dataclass
@@ -219,8 +275,8 @@ class TurboStagePassage(Passage):
     def __post_init__(self):
         self.outflow_passage.offset = [self.inflow_passage.width, 0]
 
-    def get_surfaces(self, params: Optional[SimulationParams] = None):
-        return [*self.inflow_passage.get_surfaces(params), *self.outflow_passage.get_surfaces(params)]
+    def get_profile(self, params: Optional[SimulationParams] = None):
+        return [*self.inflow_passage.get_profile(params), *self.outflow_passage.get_profile(params)]
 
     def visualize(self, title: str = "Passage"):
         self.inflow_passage.visualize(title)

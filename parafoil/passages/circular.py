@@ -40,7 +40,7 @@ class CircularPassage(Passage):
         y = self.radius * np.sin(theta)
         return np.column_stack((x, y))
 
-    def get_surfaces(self, params: Optional[SimulationParams] = None):
+    def get_profile(self, params: Optional[SimulationParams] = None):
         if self.mesh_params.airfoil_mesh_size is None:
             self.mesh_params.airfoil_mesh_size = 0.1 * self.airfoil.chord_length
         if self.mesh_params.passage_mesh_size is None:

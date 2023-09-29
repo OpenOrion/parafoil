@@ -153,6 +153,21 @@ class CamberThicknessAirfoil(Airfoil):
         bottom_coords = get_bspline(self.bottom_ctrl_pnts, self.degree)(self.sampling)
         return np.concatenate([top_coords[1:-1], bottom_coords[::-1]])
 
+    def clone(self, inlet_angle: float, outlet_angle: float):
+        return CamberThicknessAirfoil(
+            inlet_angle=inlet_angle,
+            outlet_angle=outlet_angle,
+            upper_thick_prop=[*self.upper_thick_prop],
+            lower_thick_prop=[*self.lower_thick_prop],
+            leading_prop=self.leading_prop,
+            trailing_prop=self.trailing_prop,
+            chord_length=self.chord_length,
+            stagger_angle=self.stagger_angle,
+            num_samples=self.num_samples,
+            is_cosine_sampling=self.is_cosine_sampling,
+            leading_ctrl_pnt=self.leading_ctrl_pnt
+        )
+
     def visualize(
         self,
         include_camber=True,
