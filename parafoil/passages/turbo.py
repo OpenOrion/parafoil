@@ -17,6 +17,17 @@ from jupyter_cadquery import show
 from parafoil.utils import ExtendedWorkplane, get_bspline, get_sampling
 
 
+def plot(xy):
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=xy[:, 0],
+        y=xy[:, 1],
+        # fill="toself",
+        legendgroup="passage",
+        name=f"Passage"
+    ))
+    fig.show()
+
 @dataclass
 class TurboMeshParameters:
     top_label: str = "top"
@@ -71,7 +82,7 @@ class TurboRowPassage(Passage):
 
 
         self.degree = 3
-        self.sampling = get_sampling(self.num_samples, self.is_cosine_sampling)
+        self.sampling = get_sampling(self.num_samples, False)
 
 
         # airfoils_coords = self.get_airfoils_coords()
@@ -94,7 +105,7 @@ class TurboRowPassage(Passage):
     # def get_coords(self) -> npt.NDArray[np.float64]:
     #     return self.surfaces[0].curve_loops[0].get_exterior_coords(self.num_samples, self.is_cosine_sampling)
 
-    def get_ctrl_pnts(self, type: Literal["top", "bottom", "camber"] = "top") -> npt.NDArray[np.float64]:
+    def get_ctrl_pnts(self, type: Literal["top", "bottom", "camber"] = "top", is_centerd: bool = True) -> npt.NDArray[np.float64]:
         if type == "camber":
             ctrl_coords = self.airfoil.camber_coords
         elif type == "top":
@@ -111,35 +122,63 @@ class TurboRowPassage(Passage):
                 ctrl_coords[-1]
             ])
 
-        return np.array([
+        passage_length = np.array([self.leading_edge_gap + self.trailing_edge_gap + self.airfoil.axial_chord_length, ctrl_coords[-1][1]])
+        ctrl_pnts =  np.array([
             [0, 0],
             *(ctrl_coords + np.array([self.leading_edge_gap, 0])),
-            np.array([self.leading_edge_gap + self.trailing_edge_gap + self.airfoil.axial_chord_length, ctrl_coords[-1][1]]),
+            passage_length,
         ])
 
+        if is_centerd:
+            return ctrl_pnts - passage_length/2
+        return ctrl_pnts
     def get_airfoil_profile(self, workplane: ExtendedWorkplane = ExtendedWorkplane("XY")):
         # airfoil_coords = self.get_airfoils_coords()[0]
         top_coords = get_bspline(self.airfoil.top_ctrl_pnts, self.airfoil.degree)(self.airfoil.sampling)
         bottom_coords = get_bspline(self.airfoil.bottom_ctrl_pnts, self.airfoil.degree)(self.airfoil.sampling)
 
+        step = 10
+
+        left1 = bottom_coords[:step][::-1]
+        left2 = top_coords[:step+1]
+        top = top_coords[step:-step+1]
+        right1 = top_coords[-step:len(top_coords)] 
+        right2 = bottom_coords[::-1][:step+1]
+        bottom = bottom_coords[::-1][step:-step+1]
+
+        plot(np.concatenate((left1, left2, top, right1, right2, bottom)))
 
         # for i in range(self.num_airfoils):
         #     airfoil_offseted_coords = airfoil_coords+airfoil_offset-np.array([0, i*self.spacing]) + self.offset  # type: ignore
         #     airfoils_coords.append(airfoil_offseted_coords)
 
 
-        airfoil_leading_pnt = top_coords[np.argmin(top_coords[:, 0])]
-        airfoil_offset = np.array([
-            self.leading_edge_gap-np.min(top_coords[:, 0]),
-            (self.total_spacing/2) - (self.spacing/2) - airfoil_leading_pnt[1]
-        ])
+        # airfoil_leading_pnt = top_coords[np.argmin(top_coords[:, 0])]
+        # airfoil_offset = np.array([
+        #     np.min(top_coords[:, 0]),
+        #     # (self.total_spacing/2) - (self.spacing/2) - airfoil_leading_pnt[1]
+        #     0
+        # ])
 
+        offset = np.array([
+            -self.airfoil.axial_chord_length/2, 
+            -self.airfoil.height/2
+        ])
         return (
             workplane
-            .spline(top_coords + airfoil_offset)
-            .spline(bottom_coords[::-1] + airfoil_offset)
+            .spline(left1 + offset)
+            .spline(left2 + offset)
 
+            .spline(top + offset)
+            .spline(right1 + offset)
+            .spline(right2 + offset)
+
+            .spline(bottom + offset)
             .close()
+            
+            # .spline(top_coords + offset)
+            # .spline(bottom_coords[::-1] + offset)
+            # .close()
         )
 
     def get_profile(self, workplane: ExtendedWorkplane = ExtendedWorkplane("XY"), with_airfoils: bool = True):
