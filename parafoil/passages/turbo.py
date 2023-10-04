@@ -139,14 +139,20 @@ class TurboRowPassage(Passage):
 
         step = 10
 
-        left1 = bottom_coords[:step][::-1]
-        left2 = top_coords[:step+1]
-        top = top_coords[step:-step+1]
-        right1 = top_coords[-step:len(top_coords)] 
-        right2 = bottom_coords[::-1][:step+1]
-        bottom = bottom_coords[::-1][step:-step+1]
+        # left1 = bottom_coords[:step][::-1]
+        # left2 = top_coords[:step+1]
+        left = np.concatenate((bottom_coords[:step][::-1], top_coords[1:step+1]))
+        # top = top_coords[step:-step+1]
 
-        plot(np.concatenate((left1, left2, top, right1, right2, bottom)))
+        top = np.concatenate((left, top_coords[step+1:-step+1]))
+
+        right = np.concatenate((top_coords[-step:len(top_coords)-1] , bottom_coords[::-1][:step+1]))
+        # right1 = top_coords[-step:len(top_coords)] 
+        # right2 = bottom_coords[::-1][:step+1]
+        # bottom = bottom_coords[::-1][step:-step+1]
+        bottom = np.concatenate((right, bottom_coords[::-1][step+1:-step+1]))
+
+        # plot(np.concatenate((left, top, right, bottom)))
 
         # for i in range(self.num_airfoils):
         #     airfoil_offseted_coords = airfoil_coords+airfoil_offset-np.array([0, i*self.spacing]) + self.offset  # type: ignore
@@ -166,19 +172,24 @@ class TurboRowPassage(Passage):
         ])
         return (
             workplane
-            .spline(left1 + offset)
-            .spline(left2 + offset)
+            # .spline(left1 + offset)
+            # .spline(left2 + offset)
+            # .spline(left + offset)
+            # .spline(top + offset)
+            # .spline(right + offset)
 
-            .spline(top + offset)
-            .spline(right1 + offset)
-            .spline(right2 + offset)
+            # .spline(right1 + offset)
+            # .spline(right2 + offset)
 
-            .spline(bottom + offset)
-            .close()
-            
-            # .spline(top_coords + offset)
-            # .spline(bottom_coords[::-1] + offset)
+            # .spline(bottom + offset)
             # .close()
+            
+            .spline(top_coords + offset)
+            .spline(bottom_coords[::-1] + offset)
+            # .spline(top + offset)
+            # .spline(bottom + offset)
+
+            .close()
         )
 
     def get_profile(self, workplane: ExtendedWorkplane = ExtendedWorkplane("XY"), with_airfoils: bool = True):
