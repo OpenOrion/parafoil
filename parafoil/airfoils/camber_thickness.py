@@ -82,6 +82,12 @@ class CamberThicknessAirfoil(Airfoil):
         self.axial_chord_length = self.chord_length*np.cos(self.stagger_angle)
         self.height = self.chord_length*np.sin(self.stagger_angle)
 
+        self.center_offset = np.array([
+            -self.axial_chord_length/2, 
+            -self.height/2
+        ])
+
+
     def mutate(self, **kwargs):
         return CamberThicknessAirfoil(**{**self.__dict__, **kwargs})
 
@@ -107,7 +113,8 @@ class CamberThicknessAirfoil(Airfoil):
             self.chord_length*np.sin(self.outlet_angle)
         ])
 
-        return np.vstack((p_le, p1, p2, p_te))
+        camber_ctrl_pnts = np.vstack((p_le, p1, p2, p_te))
+        return camber_ctrl_pnts
 
     @cached_property
     def top_ctrl_pnts(self):
