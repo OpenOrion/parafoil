@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field, asdict
 from functools import cached_property
-from typing import List, Optional
+from typing import List, Literal, Optional
 import numpy as np
 import plotly.graph_objects as go
 import numpy.typing as npt
@@ -62,7 +62,14 @@ class CamberThicknessAirfoil(Airfoil):
     leading_ctrl_pnt: List[float] = field(default_factory=lambda: [0.0, 0.0])
     "leading control point (length)"
 
+    angle_units: Literal["rad", "deg"] = "rad"
+    "angle units"
+
     def __post_init__(self):
+        if self.angle_units == "deg":
+            self.inlet_angle = np.radians(self.inlet_angle)
+            self.outlet_angle = np.radians(self.outlet_angle)
+
         if self.upper_thick_prop is not None:
             self.upper_thick_dist = [self.chord_length*prop for prop in self.upper_thick_prop]
 
