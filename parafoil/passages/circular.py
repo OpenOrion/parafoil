@@ -1,9 +1,8 @@
 from dataclasses import asdict, dataclass, field
-from functools import cached_property
 from typing import Any, Dict, Optional
 import numpy as np
 from plotly import graph_objects as go
-from paraflow import Passage, SimulationParams
+from paraflow import Passage, SimulationOptions
 from parafoil.airfoils import Airfoil
 from parafoil.utils import get_sampling
 
@@ -39,7 +38,7 @@ class CircularPassage(Passage):
         y = self.radius * np.sin(theta)
         return np.column_stack((x, y))
 
-    def get_surfaces(self, params: Optional[SimulationParams] = None):
+    def get_surfaces(self, params: Optional[SimulationOptions] = None):
         from ezmesh import CurveLoop, PlaneSurface
 
         if self.mesh_params.airfoil_mesh_size is None:
@@ -94,7 +93,7 @@ class CircularPassage(Passage):
 
     def get_config(
         self,
-        sim_options: SimulationParams,
+        sim_options: SimulationOptions,
         working_directory: str,
         id: str,
     ) -> Dict[str, Any]:

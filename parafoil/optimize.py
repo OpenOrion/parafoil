@@ -9,7 +9,7 @@ from pymoo.operators.crossover.sbx import SBX
 from pymoo.operators.mutation.pm import PM
 from pymoo.optimize import minimize
 from paraflow.simulation.simulation import run_simulation
-from paraflow.passages import SimulationParams, Passage
+from paraflow.passages import SimulationOptions, Passage
 from dacite.core import from_dict
 from parafoil.passages.turbo import TurboStagePassage
 from paraflow.simulation.su2 import Su2SimulationConfig
@@ -19,7 +19,7 @@ class BaseOptimizer(ElementwiseProblem):
         self,
         working_directory: str,
         passage: Passage,
-        sim_params: SimulationParams,
+        sim_params: SimulationOptions,
     ):
         self.working_directory = working_directory
         self.passage = passage
