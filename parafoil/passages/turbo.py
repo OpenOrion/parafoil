@@ -5,9 +5,8 @@ import numpy as np
 import numpy.typing as npt
 from plotly import graph_objects as go
 from parafoil.airfoils import CamberThicknessAirfoil
-from parafoil.metadata import opt_class, opt_constant, opt_range
-from ezmesh import CurveLoop, PlaneSurface, BoundaryLayerField, Geometry
-from paraflow import Passage, SimulationParams
+from parafoil.metadata import opt_class, opt_constant
+from paraflow import Passage, SimulationOptions
 
 from parafoil.passages.utils import get_wall_distance
 
@@ -108,7 +107,9 @@ class TurboRowPassage(Passage):
             airfoils_coords.append(airfoil_offseted_coords)
         return airfoils_coords
 
-    def get_surfaces(self, params: Optional[SimulationParams] = None):
+    def get_surfaces(self, params: Optional[SimulationOptions] = None):
+        from ezmesh import CurveLoop, PlaneSurface, BoundaryLayerField
+
         if self.mesh_params.airfoil_mesh_size is None:
             self.mesh_params.airfoil_mesh_size = 0.02 * self.airfoil.chord_length
         if self.mesh_params.boundary_layer_thickness is None:
@@ -219,7 +220,7 @@ class TurboStagePassage(Passage):
     def __post_init__(self):
         self.outflow_passage.offset = [self.inflow_passage.width, 0]
 
-    def get_surfaces(self, params: Optional[SimulationParams] = None):
+    def get_surfaces(self, params: Optional[SimulationOptions] = None):
         return [*self.inflow_passage.get_surfaces(params), *self.outflow_passage.get_surfaces(params)]
 
     def visualize(self, title: str = "Passage"):
@@ -231,7 +232,7 @@ class TurboStagePassage(Passage):
 
     def get_config(
         self,
-        params: SimulationParams,
+        params: SimulationOptions,
         working_directory: str,
         id: str,
     ) -> Dict[str, Any]:
