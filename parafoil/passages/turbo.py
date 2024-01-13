@@ -5,8 +5,7 @@ import numpy as np
 import numpy.typing as npt
 from plotly import graph_objects as go
 from parafoil.airfoils import CamberThicknessAirfoil
-from parafoil.metadata import opt_class, opt_constant, opt_range
-from ezmesh import CurveLoop, PlaneSurface, BoundaryLayerField, Geometry
+from parafoil.metadata import opt_class, opt_constant
 from paraflow import Passage, SimulationParams
 
 from parafoil.passages.utils import get_wall_distance
@@ -109,6 +108,8 @@ class TurboRowPassage(Passage):
         return airfoils_coords
 
     def get_surfaces(self, params: Optional[SimulationParams] = None):
+        from ezmesh import CurveLoop, PlaneSurface, BoundaryLayerField
+
         if self.mesh_params.airfoil_mesh_size is None:
             self.mesh_params.airfoil_mesh_size = 0.02 * self.airfoil.chord_length
         if self.mesh_params.boundary_layer_thickness is None:
