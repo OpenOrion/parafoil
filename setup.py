@@ -4,7 +4,7 @@ from setuptools import setup
 
 setup(
    name='parafoil',
-   version='3.1.0',
+   version='3.5.0',
    description='the open source parametric airfoil generator',
    author='Afshawn Lotfi',
    author_email='',
@@ -13,6 +13,6 @@ setup(
     "numpy",
     "scipy",
     "dacite",
-    "paraflow @ git+https://github.com/OpenOrion/paraflow.git@3.1.0"
+    "paraflow @ git+https://github.com/OpenOrion/paraflow.git@3.5.0"
    ]
 )

@@ -1,10 +1,10 @@
-plotly==5.11.0
-ipywidgets==7.6
+plotly
+ipywidgets
 ipython_genutils
 jupyterlab
 matplotlib
 
 numpy
 scipy
-git+https://github.com/OpenOrion/paraflow.git@3.1.0#egg=paraflow
+git+https://github.com/OpenOrion/paraflow.git@3.5.0#egg=paraflow
 dacite
