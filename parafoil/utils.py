@@ -2,7 +2,6 @@
 from typing import Iterable, Sequence
 import numpy as np
 import numpy.typing as npt
-from meshql.utils.types import Number
 import cadquery as cq
 from cadquery.cq import VectorLike
 from jupyter_cadquery import show
@@ -39,7 +38,7 @@ def get_occ_pnt_array(listOfVector: list[cq.Vector]):
         arr.SetValue(i + 1, vector.toPnt())
     return arr
 
-def get_occ_real_array(listOfReal: Sequence[Number]):
+def get_occ_real_array(listOfReal: Sequence[float]):
     arr = TColStd_HArray1OfReal(1, len(listOfReal))
     for i, real in enumerate(listOfReal):
         arr.SetValue(i + 1, real)
