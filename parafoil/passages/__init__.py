@@ -1,2 +1,3 @@
 from .circular import CircularPassage, CircularMeshParameters
-from .turbo import TurboRowPassage, TurboStagePassage, TurboMeshParameters
+from .turbo.station import TurboStationPassage
+from .turbo.row import TurboRowPassage

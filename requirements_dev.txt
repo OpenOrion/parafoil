@@ -7,4 +7,5 @@ matplotlib
 numpy
 scipy
 git+https://github.com/OpenOrion/paraflow.git@3.5.0#egg=paraflow
+git+https://github.com/OpenOrion/meshql.git@new-api#egg=meshql
 dacite

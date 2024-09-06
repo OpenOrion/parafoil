@@ -11,7 +11,7 @@ from pymoo.optimize import minimize
 from paraflow.simulation.simulation import run_simulation
 from paraflow.passages import SimulationParams, Passage
 from dacite.core import from_dict
-from parafoil.passages.turbo import TurboStagePassage
+from parafoil.passages.turbo.station import TurboStagePassage
 from paraflow.simulation.su2 import Su2SimulationConfig
 
 class BaseOptimizer(ElementwiseProblem):

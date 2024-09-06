@@ -37,7 +37,7 @@ class CircularPassage(Passage):
         y = self.radius * np.sin(theta)
         return np.column_stack((x, y))
 
-    def get_surfaces(self, params: Optional[SimulationParams] = None):
+    def get_profile(self, params: Optional[SimulationParams] = None):
         from ezmesh import CurveLoop, PlaneSurface
 
         if self.mesh_params.airfoil_mesh_size is None:
