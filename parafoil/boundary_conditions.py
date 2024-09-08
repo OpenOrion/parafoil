@@ -50,6 +50,7 @@ class TurbomachineryBoundaryCondition(BoundaryCondition):
 
 class ZoneInterfaceBoundaryCondition(BoundaryCondition):
     type: Literal["zone-interface"] = "zone-interface"
+    label: str = "zone_interface_condition"
     outmix_label: str
     inmix_label: str
 
@@ -132,6 +133,7 @@ class ConstantHeatfluxBoundaryCondition(BoundaryCondition):
 
 class PeriodicBoundaryCondition(BoundaryCondition):
     type: Literal["periodic"] = "periodic"
+    label: str = "periodic_condition"
     periodic_label: str
     donor_label: str
     rotation_center: tuple[float, float, float] = (0.0, 0.0, 0.0)
@@ -154,6 +156,7 @@ class PeriodicBoundaryCondition(BoundaryCondition):
     
 class ShroudBoundaryCondition(BoundaryCondition):
     type: Literal["shroud"] = "shroud"
+    label: str = "shroud_condition"
     shroud_labels: list[str]
 
     @property
@@ -161,4 +164,28 @@ class ShroudBoundaryCondition(BoundaryCondition):
         return Su2BoundaryConditionOptions(
             to_tuple=lambda: tuple(*self.shroud_labels),
             cfg_name="marker_shroud",
+        )
+    
+class PlottingBoundaryCondition(BoundaryCondition):
+    type: Literal["plotting"] = "plotting"
+    label: str = "plotting_condition"
+    plotting_labels: list[str]
+
+    @property
+    def su2(self):
+        return Su2BoundaryConditionOptions(
+            to_tuple=lambda: tuple(*self.plotting_labels),
+            cfg_name="marker_plotting",
+        )
+    
+class MonitoringBoundaryCondition(BoundaryCondition):
+    type: Literal["monitoring"] = "monitoring"
+    label: str = "monitoring_condition"
+    monitoring_labels: list[str]
+
+    @property
+    def su2(self):
+        return Su2BoundaryConditionOptions(
+            to_tuple=lambda: tuple(*self.monitoring_labels),
+            cfg_name="marker_monitoring",
         )
