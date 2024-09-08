@@ -117,8 +117,8 @@ class FarfieldBoundaryCondition(BoundaryCondition):
             cfg_name="marker_farfield",
         )
 
-class ConstantHeatfluxCondition(BoundaryCondition):
-    type: Literal["heatflux"] = "heatflux"
+class ConstantHeatfluxBoundaryCondition(BoundaryCondition):
+    type: Literal["constant-heatflux"] = "constant-heatflux"
     heatflux: float = 0.0
     """value for heatflux in W/m^2"""
 
@@ -127,4 +127,27 @@ class ConstantHeatfluxCondition(BoundaryCondition):
         return Su2BoundaryConditionOptions(
             to_tuple=lambda: (self.label, self.heatflux),
             cfg_name="marker_heatflux",
+        )
+
+
+class PeriodicBoundaryCondition(BoundaryCondition):
+    type: Literal["periodic"] = "periodic"
+    periodic_label: str
+    donor_label: str
+    rotation_center: tuple[float, float, float] = (0.0, 0.0, 0.0)
+    rotation_angle: tuple[float, float, float] = (0.0, 0.0, 0.0)
+    translation: tuple[float, float, float] = (0.0, 0.0, 0.0)
+
+    @property
+    def su2(self):
+        return Su2BoundaryConditionOptions(
+            to_tuple=lambda: (
+                self.label,
+                self.periodic_label,
+                self.donor_label,
+                *self.rotation_center,
+                *self.rotation_angle,
+                *self.translation,
+            ),
+            cfg_name="marker_periodic",
         )
