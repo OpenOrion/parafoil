@@ -151,3 +151,14 @@ class PeriodicBoundaryCondition(BoundaryCondition):
             ),
             cfg_name="marker_periodic",
         )
+    
+class ShroudBoundaryCondition(BoundaryCondition):
+    type: Literal["shroud"] = "shroud"
+    shroud_labels: list[str]
+
+    @property
+    def su2(self):
+        return Su2BoundaryConditionOptions(
+            to_tuple=lambda: tuple(*self.shroud_labels),
+            cfg_name="marker_shroud",
+        )
