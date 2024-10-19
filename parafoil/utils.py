@@ -4,7 +4,6 @@ import numpy as np
 import numpy.typing as npt
 import cadquery as cq
 from cadquery.cq import VectorLike
-from jupyter_cadquery import show
 from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeEdge
 from OCP.Geom import Geom_BSplineCurve
 from OCP.TColgp import TColgp_HArray1OfPnt
