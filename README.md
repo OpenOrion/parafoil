@@ -11,13 +11,13 @@ ParaFoil is a declarative tool that parametrically generates turbomachinery and 
 
 # Install
 ```
-pip install git+https://github.com/Turbodesigner/parafoil.git#egg=parafoil
+pip install git+https://github.com/OpenOrion/parafoil.git#egg=parafoil
 ```
 
 ## Other Versions
 ```
 # Version 1
-pip install git+https://github.com/Turbodesigner/parafoil.git@1.0.0#egg=parafoil
+pip install git+https://github.com/OpenOrion/parafoil.git@1.0.0#egg=parafoil
 ```
 
 # Example
@@ -60,11 +60,11 @@ passage.visualize()
 
 # Devlopement Setup
 ```
-git clone https://github.com/Turbodesigner/parafoil.git
+git clone https://github.com/OpenOrion/parafoil.git
 cd parafoil
 pip install -r requirements_dev.txt
 ```
 
 # Help Wanted
-Right now there are some items such as CFD meshing and adding more shaping. Please join the [Discord](https://discord.gg/H7qRauGkQ6) for project communications and collaboration. Please consider donating to the [Patreon](https://www.patreon.com/openorion) to support future work on this project.
+Right now there are some items such as CFD meshing and adding more shaping. Please join the [Discord](https://discord.gg/H7qRauGkQ6) for project communications and collaboration.
 
